@@ -217,7 +217,6 @@ const WebauthnSignupLogin = ({
 
 	const [inProgress, setInProgress] = useState(false);
 	const [name, setName] = useState("");
-	const [needPrfRetry, setNeedPrfRetry] = useState(false);
 	const [resolvePrfRetryPrompt, setResolvePrfRetryPrompt] = useState<(accept: boolean) => void>(null);
 	const [prfRetryAccepted, setPrfRetryAccepted] = useState(false);
 	const navigate = useNavigate();
@@ -237,11 +236,9 @@ const WebauthnSignupLogin = ({
 	);
 
 	const promptForPrfRetry = async (): Promise<boolean> => {
-		setNeedPrfRetry(true);
 		return new Promise((resolve: (accept: boolean) => void, reject) => {
 			setResolvePrfRetryPrompt(() => resolve);
 		}).finally(() => {
-			setNeedPrfRetry(false);
 			setPrfRetryAccepted(true);
 			setResolvePrfRetryPrompt(null);
 		});
@@ -376,7 +373,6 @@ const WebauthnSignupLogin = ({
 	const onCancel = () => {
 		console.log("onCancel");
 		setInProgress(false);
-		setNeedPrfRetry(false);
 		setPrfRetryAccepted(false);
 		setResolvePrfRetryPrompt(null);
 		setIsSubmitting(false);
@@ -392,7 +388,7 @@ const WebauthnSignupLogin = ({
 		<form onSubmit={onSubmit}>
 			{inProgress || retrySignupFrom
 				? (
-					needPrfRetry
+					resolvePrfRetryPrompt
 						? (
 							<div className="text-center">
 								{
