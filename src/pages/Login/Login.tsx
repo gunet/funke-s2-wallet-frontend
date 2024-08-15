@@ -252,6 +252,10 @@ const WebauthnSignupLogin = ({
 		} else {
 			// Using a switch here so the t() argument can be a literal, to ease searching
 			switch (result.val) {
+				case 'canceled':
+					onCancel();
+					break;
+
 				case 'loginKeystoreFailed':
 					setError(t('loginSignup.loginKeystoreFailed'));
 					break;
@@ -293,6 +297,10 @@ const WebauthnSignupLogin = ({
 		} else if (result.err) {
 			// Using a switch here so the t() argument can be a literal, to ease searching
 			switch (result.val) {
+				case 'canceled':
+					onCancel();
+					break;
+
 				case 'passkeySignupFailedServerError':
 					setError(t('loginSignup.passkeySignupFailedServerError'));
 					break;
