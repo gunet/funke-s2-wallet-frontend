@@ -391,6 +391,47 @@ export function tests() {
 			const arkgInstance = getEcInstance(instanceName);
 
 			describe(`instance ${instanceName}`, async () => {
+				it.skip("test vector generation", async () => {
+					function bigIntFromBinary(binary: Uint8Array): bigint {
+						return binary.reduce(
+							(result: bigint, b: number) => (result << 8n) + BigInt(b),
+							0n,
+						);
+					}
+
+					function bigIntToBinary(a: bigint, length: number): Uint8Array {
+						return new Uint8Array(length).map(
+							(_, i: number): number =>
+								Number(BigInt.asUintN(8, a >> (BigInt(length - 1 - i) * 8n)))
+						);
+					}
+
+					const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
+					const info_text = instanceName + ".test vectors";
+					const info = new TextEncoder().encode(info_text);
+					const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, info);
+					const derived_prik = await arkgInstance.derivePrivateKey(pri_seed, kh, info);
+					const publicKey = await ec.publicKeyFromPoint(signAlgorithm.name, namedCurve, derived_pubk);
+					const privateKey = await ec.privateKeyFromScalar(signAlgorithm.name, namedCurve, derived_prik, false, ["sign"]);
+					const sig = await crypto.subtle.sign(signAlgorithm, privateKey, info);
+
+					console.log("Inputs:");
+					console.log(`info:          '${info_text}'`);
+					console.log(`pk_bl:         h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", pub_seed.pubk_bl))))}'`);
+					console.log(`pk_kem:        h'${toHex(toU8(await crypto.subtle.exportKey("raw", pub_seed.pubk_kem)))}'`);
+					console.log(`sk_bl:         0x${toHex(bigIntToBinary(pri_seed.prik_bl, 32))}`);
+					console.log(`sk_kem:        0x${toHex(fromBase64Url((await crypto.subtle.exportKey("jwk", pri_seed.prik_kem)).d))}`);
+					console.log();
+					console.log("Derive-Public-Key outputs:");
+					console.log(`derived_pubk:  h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", derived_pubk))))}'`);
+					console.log(`kh:            h'${toHex(kh)}'`);
+					console.log();
+					console.log("Derive-Private-Key outputs:");
+					console.log(`derived_prik:  0x${toHex(bigIntToBinary(derived_prik, 32))}'`);
+
+					assert.isTrue(false, "Forced failure");
+				});
+
 				it("is correct.", async () => {
 					const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
 					const info = new TextEncoder().encode(instanceName + "test vectors");
