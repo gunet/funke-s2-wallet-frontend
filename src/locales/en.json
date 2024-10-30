@@ -203,8 +203,9 @@
 			"unnamed": "Unnamed passkey"
 		},
 		"rememberIssuer": {
-			"description": "Select the maximum time you want every issuer to remember you",
+			"description": "Set the duration for accessing issuers without re-authenticating (subject to issuer policy)",
 			"options": {
+				"none": "none",
 				"hour": "1 hour",
 				"day": "1 day",
 				"week": "1 week",
