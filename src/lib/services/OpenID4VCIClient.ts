@@ -11,17 +11,22 @@ import { StorableCredential } from '../types/StorableCredential';
 import * as jose from 'jose';
 import { generateRandomIdentifier } from '../utils/generateRandomIdentifier';
 import * as config from '../../config';
+import { EidClientAuthorizationRequest } from './EidClientAuthorizationRequest';
 
 const redirectUri = config.OPENID4VCI_REDIRECT_URI as string;
 
 export class OpenID4VCIClient implements IOpenID4VCIClient {
+
+	private customClientAuthorizationRequestHandler = new Array<{ getCredentialIssuerIdentifier: () => string; handle(url: string, client_id: string, request_uri: string): Promise<{ url: string }>}>();
 
 	constructor(private config: ClientConfig,
 		private httpProxy: IHttpProxy,
 		private openID4VCIClientStateRepository: IOpenID4VCIClientStateRepository,
 		private generateNonceProof: (cNonce: string, audience: string, clientId: string) => Promise<{ jws: string }>,
 		private storeCredential: (c: StorableCredential) => Promise<void>
-	) { }
+	) {
+		this.customClientAuthorizationRequestHandler.push(new EidClientAuthorizationRequest())
+	}
 
 	async handleCredentialOffer(credentialOfferURL: string, userHandleB64u: string): Promise<{ credentialIssuer: string, selectedCredentialConfigurationId: string; issuer_state?: string }> {
 		const parsedUrl = new URL(credentialOfferURL);
@@ -85,6 +90,9 @@ export class OpenID4VCIClient implements IOpenID4VCIClient {
 
 		const formData = new URLSearchParams();
 
+		console.log({ code_challenge, code_verifier })
+		console.log("Meta = ", this.config.credentialIssuerMetadata)
+		console.log("Conf id = ", credentialConfigurationId)
 		const selectedCredentialConfigurationSupported = this.config.credentialIssuerMetadata.credential_configurations_supported[credentialConfigurationId];
 		formData.append("scope", selectedCredentialConfigurationSupported.scope);
 
@@ -119,6 +127,16 @@ export class OpenID4VCIClient implements IOpenID4VCIClient {
 
 		console.log("State to be stored = ", state)
 		await this.openID4VCIClientStateRepository.create(new OpenID4VCIClientState(userHandleB64u, state, code_verifier, credentialConfigurationId))
+
+		for (const c of this.customClientAuthorizationRequestHandler) {
+			if (c.getCredentialIssuerIdentifier() == this.config.credentialIssuerIdentifier) {
+				const { url } = await c.handle(authorizationRequestURL, request_uri, this.config.clientId);
+				if (url) {
+					return { url };
+				}
+			}
+		}
+
 		return {
 			url: authorizationRequestURL,
 			request_uri,
