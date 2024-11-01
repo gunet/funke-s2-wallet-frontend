@@ -75,7 +75,6 @@ const CredentialInfo = ({ credential, mainClassName = "text-sm lg:text-base w-fu
 				<tbody className="divide-y-4 divide-transparent">
 					{parsedCredential && (
 						<>
-							{renderRow('expdate', 'Expiration', formatDate(new Date(parsedCredential?.exp * 1000).toISOString()), screenType)}
 							{renderRow('familyName', 'Family Name', parsedCredential?.family_name, screenType)}
 							{renderRow('firstName', 'Given Name', parsedCredential?.given_name, screenType)}
 							{renderRow('id', 'Personal ID', parsedCredential?.personal_identifier, screenType)}
@@ -86,6 +85,9 @@ const CredentialInfo = ({ credential, mainClassName = "text-sm lg:text-base w-fu
 							{renderRow('grade', 'Grade', parsedCredential?.grade, screenType)}
 							{renderRow('id', 'Social Security Number', parsedCredential?.ssn, screenType)}
 							{renderRow('id', 'Document Number', parsedCredential?.document_number, screenType)}
+						
+							{renderRow('expdate', 'Expiration', parsedCredential?.exp ? formatDate(new Date(parsedCredential?.exp * 1000).toISOString()) : undefined, screenType)}
+
 						</>
 					)}
 				</tbody>
