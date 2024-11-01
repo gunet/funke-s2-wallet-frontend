@@ -23,6 +23,8 @@ import { generateRandomIdentifier } from "../lib/utils/generateRandomIdentifier"
 import { fromBase64 } from "../util";
 import defaulCredentialImage from "../assets/images/cred.png";
 import { UserData } from "../api/types";
+import { MDoc } from "@auth0/mdl";
+import { mdocPIDParser } from "../lib/utils/mdocPIDParser";
 
 export type ContainerContextValue = {
 	httpProxy: IHttpProxy,
@@ -72,6 +74,7 @@ export function useContainer() {
 		cont.register<IOpenID4VCIHelper>('OpenID4VCIHelper', OpenID4VCIHelper, cont.resolve<IHttpProxy>('HttpProxy'));
 		const credentialParserRegistry = cont.resolve<ICredentialParserRegistry>('CredentialParserRegistry');
 
+		credentialParserRegistry.addParser(mdocPIDParser);
 		credentialParserRegistry.addParser({
 			async parse(rawCredential) {
 
@@ -176,7 +179,11 @@ export function useContainer() {
 					audience,
 					issuanceDate: new Date().toISOString(),
 				});
-			}
+			},
+
+			async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) {
+				return keystore.generateDeviceResponse(mdocCredential, presentationDefinition, mdocGeneratedNonce, verifierGeneratedNonce, clientId, responseUri);
+			},
 		);
 
 		cont.register<OpenID4VCIClientFactory>('OpenID4VCIClientFactory', OpenID4VCIClientFactory,
