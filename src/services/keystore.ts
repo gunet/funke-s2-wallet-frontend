@@ -10,6 +10,9 @@ import * as config from '../config';
 import type { DidKeyVersion } from '../config';
 import { byteArrayEquals, filterObject, jsonParseTaggedBinary, jsonStringifyTaggedBinary, toBase64Url } from "../util";
 import { SdJwt } from "@sd-jwt/core";
+import { DataItem, DeviceResponse, MDoc } from "@auth0/mdl";
+import * as cbor from 'cbor-x';
+import { COSEKeyToJWK } from "cose-kit";
 
 
 const keyDidResolver = KeyDidResolver.getResolver();
@@ -156,8 +159,8 @@ type WebauthnPrfEncryptionKeyInfoV1 = WebauthnPrfSaltInfo & WebauthnPrfEncryptio
 }
 export type WebauthnPrfEncryptionKeyInfoV2 = (
 	WebauthnPrfSaltInfo
-		& WebauthnPrfEncryptionKeyDeriveKeyParams
-		& StaticEncapsulationInfo
+	& WebauthnPrfEncryptionKeyDeriveKeyParams
+	& StaticEncapsulationInfo
 );
 export function isPrfKeyV2(prfKeyInfo: WebauthnPrfEncryptionKeyInfo): prfKeyInfo is WebauthnPrfEncryptionKeyInfoV2 {
 	return (
@@ -794,7 +797,7 @@ export async function upgradePrfKey(
 	prfKeyInfo: WebauthnPrfEncryptionKeyInfoV1,
 	promptForPrfRetry: () => Promise<boolean | AbortSignal>,
 ): Promise<EncryptedContainer> {
-	const [prfKey,, prfCredential] = await getPrfKey(
+	const [prfKey, , prfCredential] = await getPrfKey(
 		{
 			...privateData,
 			prfKeys: privateData.prfKeys.filter((keyInfo) => (
@@ -1154,4 +1157,31 @@ export async function generateOpenid4vciProof(
 		.setIssuedAt()
 		.sign(privateKey);
 	return [{ proof_jwt: jws }, newPrivateData];
+}
+
+export async function generateDeviceResponse([privateData, mainKey]: [PrivateData, CryptoKey], mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string): Promise<{ deviceResponseMDoc: MDoc }> {
+	// extract the COSE device public key from mdoc
+	const p: DataItem = cbor.decode(mdocCredential.documents[0].issuerSigned.issuerAuth.payload);
+	const deviceKeyInfo = p.data.get('deviceKeyInfo');
+	const deviceKey = deviceKeyInfo.get('deviceKey');
+
+	const devicePublicKeyJwk = COSEKeyToJWK(deviceKey);
+	const kid = await jose.calculateJwkThumbprint(devicePublicKeyJwk, "sha256");
+
+	// get the keypair based on the jwk Thumbprint
+	const keypair = privateData.keypairs[kid];
+	if (!keypair) {
+		throw new Error("Key pair not found for kid (key ID): " + kid);
+	}
+
+	const { alg, did, wrappedPrivateKey } = keypair;
+	const privateKey = await unwrapPrivateKey(wrappedPrivateKey, mainKey, true);
+	const privateKeyJwk = await crypto.subtle.exportKey("jwk", privateKey);
+
+	const deviceResponseMDoc = await DeviceResponse.from(mdocCredential)
+		.usingPresentationDefinition(presentationDefinition)
+		.usingSessionTranscriptForOID4VP(mdocGeneratedNonce, clientId, responseUri, verifierGeneratedNonce)
+		.authenticateWithSignature({ ...privateKeyJwk, alg } as JWK, alg as 'ES256')
+		.sign();
+	return { deviceResponseMDoc };
 }
