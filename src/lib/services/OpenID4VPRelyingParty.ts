@@ -12,6 +12,7 @@ import { ICredentialParserRegistry } from "../interfaces/ICredentialParser";
 import { extractSAN, getPublicKeyFromB64Cert } from "../utils/pki";
 import axios from "axios";
 import { BACKEND_URL, OPENID4VP_SAN_DNS_CHECK_SSL_CERTS, OPENID4VP_SAN_DNS_CHECK } from "../../config";
+import { MDoc } from "@auth0/mdl";
 
 export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 
@@ -22,7 +23,8 @@ export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 		private credentialParserRegistry: ICredentialParserRegistry,
 		private getAllStoredVerifiableCredentials: () => Promise<{ verifiableCredentials: StorableCredential[] }>,
 		private signJwtPresentationKeystoreFn: (nonce: string, audience: string, verifiableCredentials: any[]) => Promise<{ vpjwt: string }>,
-		private storeVerifiablePresentation: (presentation: string, format: string, identifiersOfIncludedCredentials: string[], presentationSubmission: any, audience: string) => Promise<void>
+		private storeVerifiablePresentation: (presentation: string, format: string, identifiersOfIncludedCredentials: string[], presentationSubmission: any, audience: string) => Promise<void>,
+		private generateDeviceResponseFn: (mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) => Promise<{ deviceResponseMDoc: MDoc }>,
 	) { }
 
 
