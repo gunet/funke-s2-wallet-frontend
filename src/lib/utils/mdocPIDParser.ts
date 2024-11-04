@@ -16,7 +16,7 @@ export const deviceResponseParser: ICredentialParser = {
 		try {
 			const decodedCred = jose.base64url.decode(rawCredential)
 			const parsedMDOC = parse(decodedCred);
-      const [parsedDocument] = parsedMDOC.documents as DeviceSignedDocument[];
+			const [parsedDocument] = parsedMDOC.documents as DeviceSignedDocument[];
 			const namespace = parsedDocument.issuerSignedNameSpaces[0];
 
 			const attrValues = parsedDocument.getIssuerNameSpace(namespace);
@@ -28,7 +28,7 @@ export const deviceResponseParser: ICredentialParser = {
 				beautifiedForm: attrValues,
 			}
 		}
-		catch(err) {
+		catch (err) {
 			return { error: "Failed to parse mdoc device response" };
 		}
 	}
@@ -57,7 +57,7 @@ export const mdocPIDParser: ICredentialParser = {
 			const [parsedDocument] = mdoc.documents;
 			const namespace = parsedDocument.issuerSignedNameSpaces[0]
 			const attrValues = parsedDocument.getIssuerNameSpace(namespace);
-	
+
 			return {
 				credentialFriendlyName: namespace,
 				credentialImage: {
@@ -66,7 +66,7 @@ export const mdocPIDParser: ICredentialParser = {
 				beautifiedForm: attrValues,
 			}
 		}
-		catch(err) {
+		catch (err) {
 			return { error: "Failed to parse mdoc PID" };
 		}
 	}

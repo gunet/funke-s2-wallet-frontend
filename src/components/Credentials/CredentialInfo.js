@@ -85,7 +85,7 @@ const CredentialInfo = ({ credential, mainClassName = "text-sm lg:text-base w-fu
 							{renderRow('grade', 'Grade', parsedCredential?.grade, screenType)}
 							{renderRow('id', 'Social Security Number', parsedCredential?.ssn, screenType)}
 							{renderRow('id', 'Document Number', parsedCredential?.document_number, screenType)}
-						
+
 							{renderRow('expdate', 'Expiration', parsedCredential?.exp ? formatDate(new Date(parsedCredential?.exp * 1000).toISOString()) : undefined, screenType)}
 
 						</>
