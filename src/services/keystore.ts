@@ -13,6 +13,7 @@ import { SdJwt } from "@sd-jwt/core";
 import { DataItem, DeviceResponse, MDoc } from "@auth0/mdl";
 import * as cbor from 'cbor-x';
 import { COSEKeyToJWK } from "cose-kit";
+import { SupportedAlgs } from "@auth0/mdl/lib/mdoc/model/types";
 
 
 const keyDidResolver = KeyDidResolver.getResolver();
@@ -1181,7 +1182,7 @@ export async function generateDeviceResponse([privateData, mainKey]: [PrivateDat
 	const deviceResponseMDoc = await DeviceResponse.from(mdocCredential)
 		.usingPresentationDefinition(presentationDefinition)
 		.usingSessionTranscriptForOID4VP(mdocGeneratedNonce, clientId, responseUri, verifierGeneratedNonce)
-		.authenticateWithSignature({ ...privateKeyJwk, alg } as JWK, alg as 'ES256')
+		.authenticateWithSignature({ ...privateKeyJwk, alg } as JWK, alg as SupportedAlgs)
 		.sign();
 	return { deviceResponseMDoc };
 }
