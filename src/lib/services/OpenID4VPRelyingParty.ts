@@ -4,7 +4,7 @@ import { Verify } from "../utils/Verify";
 import { HasherAlgorithm, HasherAndAlgorithm, SdJwt } from "@sd-jwt/core";
 import { VerifiableCredentialFormat } from "../schemas/vc";
 import { generateRandomIdentifier } from "../utils/generateRandomIdentifier";
-import { base64url, EncryptJWT, importJWK, importX509, jwtVerify } from "jose";
+import { base64url, CompactEncrypt, importJWK, importX509, jwtVerify } from "jose";
 import { OpenID4VPRelyingPartyState } from "../types/OpenID4VPRelyingPartyState";
 import { OpenID4VPRelyingPartyStateRepository } from "./OpenID4VPRelyingPartyStateRepository";
 import { IHttpProxy } from "../interfaces/IHttpProxy";
@@ -12,6 +12,10 @@ import { ICredentialParserRegistry } from "../interfaces/ICredentialParser";
 import { extractSAN, getPublicKeyFromB64Cert } from "../utils/pki";
 import axios from "axios";
 import { BACKEND_URL, OPENID4VP_SAN_DNS_CHECK_SSL_CERTS, OPENID4VP_SAN_DNS_CHECK } from "../../config";
+import { MDoc } from "@auth0/mdl";
+import { parse } from '@auth0/mdl';
+import { JSONPath } from "jsonpath-plus";
+import { cborDecode, cborEncode } from "../utils/cbor";
 
 export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 
@@ -22,7 +26,8 @@ export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 		private credentialParserRegistry: ICredentialParserRegistry,
 		private getAllStoredVerifiableCredentials: () => Promise<{ verifiableCredentials: StorableCredential[] }>,
 		private signJwtPresentationKeystoreFn: (nonce: string, audience: string, verifiableCredentials: any[]) => Promise<{ vpjwt: string }>,
-		private storeVerifiablePresentation: (presentation: string, format: string, identifiersOfIncludedCredentials: string[], presentationSubmission: any, audience: string) => Promise<void>
+		private storeVerifiablePresentation: (presentation: string, format: string, identifiersOfIncludedCredentials: string[], presentationSubmission: any, audience: string) => Promise<void>,
+		private generateDeviceResponseFn: (mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) => Promise<{ deviceResponseMDoc: MDoc }>,
 	) { }
 
 
@@ -135,7 +140,7 @@ export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 			for (const vc of vcList) {
 				try {
 
-					if (vc.format === VerifiableCredentialFormat.SD_JWT_VC && (descriptor.format === undefined || VerifiableCredentialFormat.SD_JWT_VC in descriptor.format)) {
+					if (vc.format === VerifiableCredentialFormat.SD_JWT_VC && (VerifiableCredentialFormat.SD_JWT_VC in descriptor.format)) {
 						const result = await this.credentialParserRegistry.parse(vc.credential);
 						if ('error' in result) {
 							throw new Error('Could not parse credential');
@@ -144,6 +149,40 @@ export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 							conformingVcList.push(vc.credentialIdentifier);
 							continue;
 						}
+					}
+
+					if (vc.format == VerifiableCredentialFormat.MSO_MDOC && (VerifiableCredentialFormat.MSO_MDOC in descriptor.format)) {
+						const credentialBytes = base64url.decode(vc.credential);
+						const issuerSigned = cborDecode(credentialBytes);
+						// According to ISO 23220-4: The value of input descriptor id should be the doctype
+						const m = {
+							version: '1.0',
+							documents: [new Map([
+								['docType', descriptor.id],
+								['issuerSigned', issuerSigned]
+							])],
+							status: 0
+						};
+						const encoded = cborEncode(m);
+						const mdoc = parse(encoded);
+						const [document] = mdoc.documents;
+						const ns = document.getIssuerNameSpace(document.issuerSignedNameSpaces[0]);
+						const json = {};
+						json[descriptor.id] = ns;
+
+						const fieldsWithValue = descriptor.constraints.fields.map((field) => {
+							const values = field.path.map((possiblePath) => JSONPath({ path: possiblePath, json: json })[0]);
+							const val = values.filter((v) => v != undefined || v != null)[0]; // get first value that is not undefined
+							return { field, val };
+						});
+						console.log("Fields with value = ", fieldsWithValue)
+
+						if (fieldsWithValue.map((fwv) => fwv.val).includes(undefined)) {
+							continue; // there is at least one field missing from the requirements
+						}
+
+						conformingVcList.push(vc.credentialIdentifier);
+						continue;
 					}
 				}
 				catch (err) {
@@ -259,6 +298,9 @@ export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 		const client_id = S.client_id;
 		const nonce = S.nonce;
 
+		let apu = undefined;
+		let apv = undefined;
+
 		let { verifiableCredentials } = await this.getAllStoredVerifiableCredentials();
 		const allSelectedCredentialIdentifiers = Array.from(selectionMap.values());
 		const filteredVCEntities = verifiableCredentials
@@ -292,6 +334,44 @@ export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 				});
 				originalVCs.push(vcEntity);
 			}
+			else if (vcEntity.format === VerifiableCredentialFormat.MSO_MDOC) {
+				console.log("Response uri = ", response_uri);
+				const descriptor = presentationDefinition.input_descriptors.filter((desc) => desc.id === descriptor_id)[0];
+				const credentialBytes = base64url.decode(vcEntity.credential);
+				const issuerSigned = cborDecode(credentialBytes);
+
+				// According to ISO 23220-4: The value of input descriptor id should be the doctype
+				const m = {
+					version: '1.0',
+					documents: [new Map([
+						['docType', descriptor.id],
+						['issuerSigned', issuerSigned]
+					])],
+					status: 0
+				};
+				const encoded = cborEncode(m);
+				const mdoc = parse(encoded);
+
+				const mdocGeneratedNonce = generateRandomIdentifier(8); // mdoc generated nonce
+				apu = mdocGeneratedNonce; // no need to base64url encode. jose library handles it
+				apv = nonce;  // no need to base64url encode. jose library handles it
+
+				const { deviceResponseMDoc } = await this.generateDeviceResponseFn(mdoc, presentationDefinition, mdocGeneratedNonce, nonce, client_id, response_uri);
+				function uint8ArrayToHexString(uint8Array) {
+					// @ts-ignore
+					return Array.from(uint8Array, byte => byte.toString(16).padStart(2, '0')).join('');
+				}
+				console.log("Device response in hex format = ", uint8ArrayToHexString(deviceResponseMDoc.encode()));
+				const encodedDeviceResponse = base64url.encode(deviceResponseMDoc.encode());
+				selectedVCs.push(encodedDeviceResponse);
+				generatedVPs.push(encodedDeviceResponse);
+				descriptorMap.push({
+					id: descriptor_id,
+					format: VerifiableCredentialFormat.MSO_MDOC,
+					path: `$`
+				});
+				originalVCs.push(vcEntity);
+			}
 		}
 
 		const presentationSubmission = {
@@ -305,11 +385,12 @@ export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 		if (S.client_metadata.authorization_encrypted_response_alg && S.client_metadata.jwks.keys.length > 0) {
 			const rp_eph_pub_jwk = S.client_metadata.jwks.keys[0];
 			const rp_eph_pub = await importJWK(rp_eph_pub_jwk, S.client_metadata.authorization_encrypted_response_alg);
-			const jwe = await new EncryptJWT({
+			const jwe = await new CompactEncrypt(new TextEncoder().encode(JSON.stringify({
 				vp_token: generatedVPs[0],
 				presentation_submission: presentationSubmission,
 				state: S.state ?? undefined
-			})
+			})))
+				.setKeyManagementParameters({ apu: new TextEncoder().encode(apu), apv: new TextEncoder().encode(apv) })
 				.setProtectedHeader({ alg: S.client_metadata.authorization_encrypted_response_alg, enc: S.client_metadata.authorization_encrypted_response_enc, kid: rp_eph_pub_jwk.kid })
 				.encrypt(rp_eph_pub);
 
