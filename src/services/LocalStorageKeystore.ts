@@ -34,7 +34,7 @@ export interface LocalStorageKeystore {
 	close(): Promise<void>,
 
 	initPassword(password: string): Promise<[EncryptedContainer, (userHandleB64u: string) => void]>,
-	initPrf(
+	initWebauthn(
 		credentialOrCreateOptions: PrecreatedPublicKeyCredential | CredentialCreationOptions,
 		promptForPrfRetry: () => Promise<boolean | AbortSignal>,
 		user: UserData,
@@ -213,8 +213,9 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 		mainKey: CryptoKey,
 		keyInfo: AsymmetricEncryptedContainerKeys,
 		user: UserData,
+		credential: PublicKeyCredentialCreation | null,
 	): Promise<EncryptedContainer> => {
-		const unlocked = await keystore.init(mainKey, keyInfo);
+		const unlocked = await keystore.init(mainKey, keyInfo, credential);
 		await finishUnlock(unlocked, user);
 		const { privateData } = unlocked;
 		return privateData;
@@ -226,16 +227,16 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 
 		initPassword: async (password: string): Promise<[EncryptedContainer, (userHandleB64u: string) => void]> => {
 			const { mainKey, keyInfo } = await keystore.initPassword(password);
-			return [await init(mainKey, keyInfo, null), setUserHandleB64u];
+			return [await init(mainKey, keyInfo, null, null), setUserHandleB64u];
 		},
 
-		initPrf: async (
+		initWebauthn: async (
 			credentialOrCreateOptions: PrecreatedPublicKeyCredential | CredentialCreationOptions,
 			promptForPrfRetry: () => Promise<boolean | AbortSignal>,
 			user: UserData,
 		): Promise<[PublicKeyCredentialCreation, EncryptedContainer]> => {
-			const { credential, mainKey, keyInfo } = await keystore.initPrf(credentialOrCreateOptions, promptForPrfRetry);
-			const result = await init(mainKey, keyInfo, user);
+			const { credential, mainKey, keyInfo } = await keystore.initWebauthn(credentialOrCreateOptions, promptForPrfRetry);
+			const result = await init(mainKey, keyInfo, user, credential);
 			return [credential, result];
 		},
 
