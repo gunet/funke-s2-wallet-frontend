@@ -7,7 +7,7 @@ import defaulCredentialImage from "../../assets/images/cred.png";
 
 
 export const deviceResponseParser: ICredentialParser = {
-	parse: async function (rawCredential: object | string, presentationDefinitionFilter?: PresentationDefinitionType): Promise<{ credentialFriendlyName: string; credentialImage: { credentialImageURL: string; } | { credentialImageSvgTemplateURL: string; }; beautifiedForm: any; } | { error: string; }> {
+	parse: async function (rawCredential: object | string, presentationDefinitionFilter?: PresentationDefinitionType): Promise<{ credentialFriendlyName: string; credentialImage: { credentialImageURL: string; }; beautifiedForm: any; } | { error: string }> {
 
 		if (typeof rawCredential != 'string') {
 			return { error: "Not for this parser" };
@@ -35,7 +35,7 @@ export const deviceResponseParser: ICredentialParser = {
 }
 
 export const mdocPIDParser: ICredentialParser = {
-	parse: async function (rawCredential: object | string, presentationDefinitionFilter?: PresentationDefinitionType): Promise<{ credentialFriendlyName: string; credentialImage: { credentialImageURL: string; } | { credentialImageSvgTemplateURL: string; }; beautifiedForm: any; } | { error: string; }> {
+	parse: async function (rawCredential: object | string, presentationDefinitionFilter?: PresentationDefinitionType): Promise<{ credentialFriendlyName: string; credentialImage: { credentialImageURL: string; }; beautifiedForm: any; } | { error: string }> {
 		console.log("Raw cred = ", rawCredential)
 		if (typeof rawCredential != 'string') {
 			return { error: "Not for this parser" };
