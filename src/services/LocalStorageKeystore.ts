@@ -68,8 +68,8 @@ export interface LocalStorageKeystore {
 	getUserHandleB64u(): string | null,
 
 	signJwtPresentation(nonce: string, audience: string, verifiableCredentials: any[]): Promise<{ vpjwt: string }>,
-	generateOpenid4vciProof(nonce: string, audience: string, issuer: string): Promise<[
-		{ proof_jwt: string },
+	generateOpenid4vciProofs(requests: { nonce: string, audience: string, issuer: string }[]): Promise<[
+		{ proof_jwts: string[] },
 		AsymmetricEncryptedContainer,
 		CommitCallback,
 	]>,
@@ -372,20 +372,27 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 			await keystore.signJwtPresentation(await openPrivateData(), nonce, audience, verifiableCredentials)
 		),
 
-		generateOpenid4vciProof: async (nonce: string, audience: string, issuer: string): Promise<[
-			{ proof_jwt: string },
+		generateOpenid4vciProofs: async (requests: { nonce: string, audience: string, issuer: string }[]): Promise<[
+			{ proof_jwts: string[] },
 			AsymmetricEncryptedContainer,
 			CommitCallback,
 		]> => (
-			await editPrivateData(async (container) =>
-				await keystore.generateOpenid4vciProof(
-					container,
-					config.DID_KEY_VERSION,
-					nonce,
-					audience,
-					issuer
-				),
-			)
+			await editPrivateData(async (originalContainer) => {
+				let container = originalContainer;
+				let proof_jwts = [];
+				for (const { nonce, audience, issuer } of requests) {
+					const [{ proof_jwt }, newContainer] = await keystore.generateOpenid4vciProof(
+						container,
+						config.DID_KEY_VERSION,
+						nonce,
+						audience,
+						issuer
+					);
+					proof_jwts.push(proof_jwt);
+					container = newContainer;
+				}
+				return [{ proof_jwts }, container];
+			})
 		),
 
 		generateDeviceResponse: async (mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string): Promise<{ deviceResponseMDoc: MDoc }> => (
