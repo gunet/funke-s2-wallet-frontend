@@ -24,6 +24,8 @@ import { fromBase64 } from "../util";
 import defaultCredentialImage from "../assets/images/cred.png";
 import renderSvgTemplate from "../components/Credentials/RenderSvgTemplate";
 import renderCustomSvgTemplate from "../components/Credentials/RenderCustomSvgTemplate";
+import { MDoc } from "@auth0/mdl";
+import { deviceResponseParser, mdocPIDParser } from "../lib/utils/mdocPIDParser";
 
 export type ContainerContextValue = {
 	httpProxy: IHttpProxy,
@@ -80,6 +82,8 @@ export const ContainerContextProvider = ({ children }) => {
 				cont.register<IOpenID4VCIHelper>('OpenID4VCIHelper', OpenID4VCIHelper, cont.resolve<IHttpProxy>('HttpProxy'));
 				const credentialParserRegistry = cont.resolve<ICredentialParserRegistry>('CredentialParserRegistry');
 
+				credentialParserRegistry.addParser(deviceResponseParser);
+				credentialParserRegistry.addParser(mdocPIDParser);
 				credentialParserRegistry.addParser({
 					async parse(rawCredential) {
 
@@ -196,7 +200,11 @@ export const ContainerContextProvider = ({ children }) => {
 							audience,
 							issuanceDate: new Date().toISOString(),
 						});
-					}
+					},
+
+					async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) {
+						return keystore.generateDeviceResponse(mdocCredential, presentationDefinition, mdocGeneratedNonce, verifierGeneratedNonce, clientId, responseUri);
+					},
 				);
 
 				cont.register<OpenID4VCIClientFactory>('OpenID4VCIClientFactory', OpenID4VCIClientFactory,
@@ -212,6 +220,31 @@ export const ContainerContextProvider = ({ children }) => {
 						await api.post('/storage/vc', {
 							...c
 						});
+					},
+
+					async function authorizationRequestModifier(credentialIssuerIdentifier: string, url: string, request_uri?: string, client_id?: string) {
+						if (credentialIssuerIdentifier !== process.env.REACT_APP_PID_CREDENTIAL_ISSUER_IDENTIFIER) {
+							return { url };
+						}
+						const isMobile = window.innerWidth <= 480;
+						const eIDClientURL = isMobile ? process.env.REACT_APP_OPENID4VCI_EID_CLIENT_URL.replace('http', 'eid') : process.env.REACT_APP_OPENID4VCI_EID_CLIENT_URL;
+						console.log("Eid client url = ", eIDClientURL)
+						const urlObj = new URL(url);
+						// Construct the base URL
+						const baseUrl = `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
+
+						// Parameters
+						// Encode parameters
+						const encodedClientId = encodeURIComponent(client_id);
+						const encodedRequestUri = encodeURIComponent(request_uri);
+						const tcTokenURL = `${baseUrl}?client_id=${encodedClientId}&request_uri=${encodedRequestUri}`;
+
+						const newLoc = `${eIDClientURL}?tcTokenURL=${encodeURIComponent(tcTokenURL)}`
+
+						console.log("new loc = ", newLoc)
+						return {
+							url: newLoc
+						};
 					},
 				);
 
