@@ -563,6 +563,18 @@ describe("The keystore", () => {
 				"test-nonce",
 				"test-audience",
 				"test-issuer",
+				async event => {
+					switch (event.id) {
+						case 'intro':
+							return { id: 'intro:ok' };
+						case 'webauthn-begin':
+							return { id: 'webauthn-begin:ok', credential: mockCredential };
+						case 'success':
+							return { id: 'success:ok' };
+						default:
+							throw new Error('Unexpected event: ' + event.id, { cause: event });
+					}
+				}
 			);
 			const newExportedMainKey = await keystore.exportMainKey(newMainKey);
 			const [newPrivateDataContents,] = await keystore.openPrivateData(newExportedMainKey, newPrivateData);

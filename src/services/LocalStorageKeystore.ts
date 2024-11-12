@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useContext, useEffect } from "react";
 
 import * as config from "../config";
 import { useClearStorages, useLocalStorage, useSessionStorage } from "../hooks/useStorage";
@@ -9,6 +9,8 @@ import { useOnUserInactivity } from "../hooks/useOnUserInactivity";
 import * as keystore from "./keystore";
 import type { AsymmetricEncryptedContainer, AsymmetricEncryptedContainerKeys, EncryptedContainer, OpenedContainer, PrecreatedPublicKeyCredential, PrivateData, UnlockSuccess, WebauthnPrfEncryptionKeyInfo, WebauthnPrfSaltInfo, WrappedKeyInfo } from "./keystore";
 import { PublicKeyCredentialCreation } from "../types/webauthn";
+import WebauthnInteractionDialogContext from "../context/WebauthnInteractionDialogContext";
+import { useTranslation } from "react-i18next";
 
 
 type UserData = {
@@ -84,6 +86,9 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 	const [userHandleB64u, setUserHandleB64u, clearUserHandleB64u] = useSessionStorage<string | null>("userHandle", null);
 	const [mainKey, setMainKey, clearMainKey] = useSessionStorage<BufferSource | null>("mainKey", null);
 	const clearSessionStorage = useClearStorages(clearUserHandleB64u, clearMainKey);
+
+	const { t } = useTranslation();
+	const webauthnInteractionCtx = useContext(WebauthnInteractionDialogContext);
 
 	const idb = useIndexedDb("wallet-frontend", 2, useCallback((db, prevVersion, newVersion) => {
 		if (prevVersion < 1) {
@@ -375,9 +380,65 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 			return (userHandleB64u);
 		},
 
-		signJwtPresentation: async (nonce: string, audience: string, verifiableCredentials: any[]): Promise<{ vpjwt: string }> => (
-			await keystore.signJwtPresentation(await openPrivateData(), nonce, audience, verifiableCredentials)
-		),
+		signJwtPresentation: async (nonce: string, audience: string, verifiableCredentials: any[]): Promise<{ vpjwt: string }> => {
+			const moveUiStateMachine = webauthnInteractionCtx.setup(
+				t("Sign credential presentation"),
+				state => {
+					switch (state.id) {
+						case 'intro':
+							return {
+								bodyText: t('To proceed, please authenticate with your passkey.'),
+								buttons: {
+									continue: 'intro:ok',
+								},
+							};
+
+						case 'webauthn-begin':
+							return {
+								bodyText: t("Please interact with your authenticator..."),
+							};
+
+						case 'err':
+							return {
+								bodyText: t("An error occurred!"),
+								buttons: {
+									retry: true,
+								},
+							};
+
+						case 'err:ext:sign:signature-not-found':
+							return {
+								bodyText: t("An error occurred: Signature not found."),
+								buttons: {
+									retry: true,
+								},
+							};
+
+						case 'success':
+							return {
+								bodyText: t("Success! Please wait..."),
+							};
+
+						default:
+							throw new Error('Unknown WebAuthn interaction state:', { cause: state });
+					}
+				},
+			);
+			return await keystore.signJwtPresentation(
+				await openPrivateData(),
+				nonce,
+				audience,
+				verifiableCredentials,
+				async event => {
+					if (event.id === "success") {
+						moveUiStateMachine(event);
+						return { id: "success:ok" };
+					} else {
+						return moveUiStateMachine(event);
+					}
+				},
+			);
+		},
 
 		generateOpenid4vciProofs: async (requests: { nonce: string, audience: string, issuer: string }[]): Promise<[
 			{ proof_jwts: string[] },
@@ -387,14 +448,65 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 			await editPrivateData(async (originalContainer) => {
 				let container = originalContainer;
 				let proof_jwts = [];
+
 				for (const { nonce, audience, issuer } of requests) {
+
+					const moveUiStateMachine = webauthnInteractionCtx.setup(
+						t("Sign credential issuance"),
+						state => {
+							switch (state.id) {
+								case 'intro':
+									return {
+										bodyText: t('To proceed, please authenticate with your passkey.'),
+										buttons: {
+											continue: 'intro:ok',
+										},
+									};
+
+								case 'webauthn-begin':
+									return {
+										bodyText: t("Please interact with your authenticator..."),
+									};
+
+								case 'err':
+									return {
+										bodyText: t("An error occurred!"),
+										buttons: {
+											retry: true,
+										},
+									};
+
+								case 'err:ext:sign:signature-not-found':
+									return {
+										bodyText: t("An error occurred: Signature not found."),
+										buttons: {
+											retry: true,
+										},
+									};
+
+								case 'success':
+									return {
+										bodyText: t("Your credential has been issued successfully."),
+										buttons: {
+											continue: 'success:ok',
+										},
+									};
+
+								default:
+									throw new Error('Unknown WebAuthn interaction state:', { cause: state });
+							}
+						},
+					);
+
 					const [{ proof_jwt }, newContainer] = await keystore.generateOpenid4vciProof(
 						container,
 						config.DID_KEY_VERSION,
 						nonce,
 						audience,
-						issuer
+						issuer,
+						moveUiStateMachine,
 					);
+					moveUiStateMachine({ id: 'success:dismiss' });
 					proof_jwts.push(proof_jwt);
 					container = newContainer;
 				}

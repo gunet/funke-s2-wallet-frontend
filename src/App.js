@@ -8,6 +8,7 @@ import useCheckURL from './hooks/useCheckURL';
 import { CredentialsProvider } from './context/CredentialsContext';
 import { withSessionContext } from './context/SessionContext';
 import { checkForUpdates } from './offlineRegistrationSW';
+import { withWebauthnInteractionDialogContext } from './context/WebauthnInteractionDialogContext';
 
 import FadeInContentTransition from './components/Transitions/FadeInContentTransition';
 import HandlerNotification from './components/Notifications/HandlerNotification';
@@ -179,4 +180,4 @@ function App() {
 	);
 }
 
-export default withSessionContext(withContainerContext(App));
+export default withWebauthnInteractionDialogContext(withSessionContext(withContainerContext(App)));
