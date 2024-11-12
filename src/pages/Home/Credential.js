@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
+import QRCode from "react-qr-code";
+import { BsQrCode } from "react-icons/bs";
 
 // Contexts
 import SessionContext from '../../context/SessionContext';
@@ -20,6 +22,7 @@ import CredentialDeleteButton from '../../components/Credentials/CredentialDelet
 import DeletePopup from '../../components/Popups/DeletePopup';
 import Button from '../../components/Buttons/Button';
 import CredentialLayout from '../../components/Credentials/CredentialLayout';
+import PopupLayout from '../../components/Popups/PopupLayout';
 
 const Credential = () => {
 	const { credentialId } = useParams();
@@ -33,6 +36,8 @@ const Credential = () => {
 	const [credentialFiendlyName, setCredentialFriendlyName] = useState(null);
 	const screenType = useScreenType();
 	const [activeTab, setActiveTab] = useState(0);
+	const [showMdocQR, setShowMdocQR] = useState(false);
+	const [mdocQRContent, setMdocQRContent] = useState("");
 	const navigate = useNavigate();
 	const { t } = useTranslation();
 
@@ -90,6 +95,12 @@ const Credential = () => {
 		}
 	];
 
+	const generateQR = async () => {
+		setMdocQRContent(await container.mdocAppCommunication.generateEngagementQR());
+		setShowMdocQR(true);
+	};
+
+
 	return (
 		<CredentialLayout title={t('pageCredentials.credentialTitle')}>
 			<>
@@ -116,6 +127,7 @@ const Credential = () => {
 							>
 								{t('pageCredentials.presentationsTitle')}
 							</Button>
+
 							<Button
 								variant="primary"
 								onClick={() => navigate(`/credential/${credentialId}/details`)}
@@ -129,7 +141,11 @@ const Credential = () => {
 				<div className='px-2 w-full'>
 					<CredentialDeleteButton onDelete={() => { setShowDeletePopup(true); }} />
 				</div>
-
+				<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>} Device Engagement QR</Button>
+				<PopupLayout isOpen={showMdocQR}>
+					<QRCode value={mdocQRContent} />
+					<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
+				</PopupLayout>
 				{/* Delete Credential Popup */}
 				{showDeletePopup && vcEntity && (
 					<DeletePopup
