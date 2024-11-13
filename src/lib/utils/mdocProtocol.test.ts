@@ -2,7 +2,7 @@ import { assert, describe, it } from "vitest";
 import { createSessionKey, encryptMessage, decryptMessage, hexToUint8Array } from "../utils/mdocProtocol";
 import { cborDecode, cborEncode } from "../utils/cbor";
 
-it("", async () => {
+it("can decrypt a message with a session key", async () => {
 	const keyPair = await crypto.subtle.generateKey(
 		{
 			name: "ECDH",
