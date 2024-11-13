@@ -235,7 +235,7 @@ export const ContainerContextProvider = ({ children }) => {
 					},
 
 					async function authorizationRequestModifier(credentialIssuerIdentifier: string, url: string, request_uri?: string, client_id?: string) {
-						if (credentialIssuerIdentifier !== process.env.REACT_APP_PID_CREDENTIAL_ISSUER_IDENTIFIER) {
+						if (!credentialIssuerIdentifier.startsWith(process.env.REACT_APP_PID_CREDENTIAL_ISSUER_IDENTIFIER)) {
 							return { url };
 						}
 						const isMobile = window.innerWidth <= 480;
