@@ -36,7 +36,6 @@ export const deviceResponseParser: ICredentialParser = {
 
 export const mdocPIDParser: ICredentialParser = {
 	parse: async function (rawCredential: object | string, presentationDefinitionFilter?: PresentationDefinitionType): Promise<{ credentialFriendlyName: string; credentialImage: { credentialImageURL: string; }; beautifiedForm: any; } | { error: string }> {
-		console.log("Raw cred = ", rawCredential)
 		if (typeof rawCredential != 'string') {
 			return { error: "Not for this parser" };
 		}
