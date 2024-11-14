@@ -91,8 +91,8 @@ export const ContainerContextProvider = ({ children }) => {
 				cont.register<IOpenID4VCIHelper>('OpenID4VCIHelper', OpenID4VCIHelper, cont.resolve<IHttpProxy>('HttpProxy'));
 				const credentialParserRegistry = cont.resolve<ICredentialParserRegistry>('CredentialParserRegistry');
 
-				credentialParserRegistry.addParser(deviceResponseParser);
-				credentialParserRegistry.addParser(mdocPIDParser);
+				credentialParserRegistry.addParser(deviceResponseParser, 'deviceResponseParser');
+				credentialParserRegistry.addParser(mdocPIDParser, 'mdocPIDParser');
 				credentialParserRegistry.addParser({
 					async parse(rawCredential) {
 
@@ -185,7 +185,7 @@ export const ContainerContextProvider = ({ children }) => {
 						}
 
 					},
-				});
+				}, 'sdjwtParser');
 
 				cont.register<IOpenID4VPRelyingParty>('OpenID4VPRelyingParty', OpenID4VPRelyingParty,
 					cont.resolve<IOpenID4VPRelyingPartyStateRepository>('OpenID4VPRelyingPartyStateRepository'),

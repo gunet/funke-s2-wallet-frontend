@@ -37,6 +37,7 @@ const Credential = () => {
 	const screenType = useScreenType();
 	const [activeTab, setActiveTab] = useState(0);
 	const [showMdocQR, setShowMdocQR] = useState(false);
+	const [isCredentialMdoc, setIsCredentialMdoc] = useState(false);
 	const [mdocQRContent, setMdocQRContent] = useState("");
 	const navigate = useNavigate();
 	const { t } = useTranslation();
@@ -100,6 +101,21 @@ const Credential = () => {
 		setShowMdocQR(true);
 	};
 
+	useEffect(() => {
+		async function isItMdoc(credential) {
+			const mdoc = await container.credentialParserRegistry.parse(credential);
+			if (mdoc?.parsedBy === 'mdocPIDParser') {
+				setIsCredentialMdoc(true);
+			} else {
+				setIsCredentialMdoc(false);
+			}
+		}
+
+		if (vcEntity?.credential) {
+			isItMdoc(vcEntity?.credential);
+		}
+	}, [vcEntity]);
+
 
 	return (
 		<CredentialLayout title={t('pageCredentials.credentialTitle')}>
@@ -141,7 +157,7 @@ const Credential = () => {
 				<div className='px-2 w-full'>
 					<CredentialDeleteButton onDelete={() => { setShowDeletePopup(true); }} />
 				</div>
-				<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>} Device Engagement QR</Button>
+				{isCredentialMdoc && (<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>} Device Engagement QR</Button>)}
 				<PopupLayout isOpen={showMdocQR}>
 					<QRCode value={mdocQRContent} />
 					<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
