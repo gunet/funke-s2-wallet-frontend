@@ -1,3 +1,6 @@
+import { cborEncode } from "./cbor";
+import { DataItem } from "@auth0/mdl";
+
 export async function createSessionKey(rawPublic: ArrayBuffer, ephemeralKey: CryptoKeyPair) : Promise<CryptoKey> { 
 	const importedVerifierPublicKey = await crypto.subtle.importKey(
 		"raw",
@@ -81,6 +84,12 @@ export function uint8ArrayToBase64Url(array: any) {
 	return base64UrlString;
 }
 
+export function uint8ArraytoHexString(byteArray: Uint8Array): string {
+	return Array.from(byteArray, (byte: number) =>
+		('0' + (byte & 0xFF).toString(16)).slice(-2)
+	).join('');
+}
+
 export async function deriveSKReader(sessionTranscriptBytes) {
 
 }
@@ -120,4 +129,59 @@ export async function getKey(keyMaterial, salt, info) {
 		true,
 		["encrypt", "decrypt"]
 	);
+}
+
+export function getSessionTranscriptBytes(deviceEngagementBytes, eReaderKey) {
+	return cborEncode(DataItem.fromData([
+		deviceEngagementBytes, // DeviceEngagementBytes
+		DataItem.fromData(eReaderKey), // EReaderKeyBytes
+		null,
+	]))
+}
+
+export function getDeviceEngagement(uuid: string, publicKeyJWK: JsonWebKey) {
+	const bleOptions = new Map<number, any>([
+		[0, false],
+		[1, true],
+		[11, uuidToUint8Array(uuid)],
+	]);
+
+	const themap = new Map<number, any>();
+	themap.set(0, "1.0");
+	//@ts-ignore
+	themap.set(1, [1, DataItem.fromData(new Map([[1, 2], [-1, 1],
+
+	[-2, base64urlToUint8Array(publicKeyJWK.x)],
+	[-3, base64urlToUint8Array(publicKeyJWK.y)]]))])
+	themap.set(2, [[2, 1, bleOptions]]);
+
+	return themap;
+}
+
+export function uuidToUint8Array(uuid) {
+	// Remove hyphens from the UUID string
+	const hexString = uuid.replace(/-/g, '');
+
+	// Create a Uint8Array with a length of 16 bytes (128 bits)
+	const byteArray = new Uint8Array(16);
+
+	// Fill the byte array with values by parsing the hex pairs
+	for (let i = 0; i < 16; i++) {
+		byteArray[i] = parseInt(hexString.slice(i * 2, i * 2 + 2), 16);
+	}
+
+	return byteArray;
+}
+
+export function base64urlToUint8Array(base64url: string): Uint8Array {
+	const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/'); // Base64url to Base64
+	const binaryString = atob(base64);  // Decode base64 to binary string
+	const byteArray = new Uint8Array(binaryString.length); // Create a Uint8Array of the same length
+
+	// Populate the Uint8Array with byte values
+	for (let i = 0; i < binaryString.length; i++) {
+		byteArray[i] = binaryString.charCodeAt(i);
+	}
+
+	return byteArray;
 }
