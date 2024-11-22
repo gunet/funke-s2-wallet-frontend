@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export class MdocAppCommunication implements IMdocAppCommunication {
 	constructor(
-		private generateDeviceResponseFn: (mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) => Promise<{ deviceResponseMDoc: MDoc }>,
+		private generateDeviceResponseFn: (mdocCredential: MDoc, presentationDefinition: any, sessionTranscripBytes: any) => Promise<{ deviceResponseMDoc: MDoc }>,
 	) { }
 	async generateEngagementQR() {
 		console.log("Hello Engagement QR");

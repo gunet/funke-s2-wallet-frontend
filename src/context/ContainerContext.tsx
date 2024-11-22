@@ -83,8 +83,8 @@ export const ContainerContextProvider = ({ children }) => {
 
 				cont.register<IHttpProxy>('HttpProxy', HttpProxy);
 				cont.register<IMdocAppCommunication>('MdocAppCommunication', MdocAppCommunication,
-					async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) {
-						return keystore.generateDeviceResponse(mdocCredential, presentationDefinition, mdocGeneratedNonce, verifierGeneratedNonce, clientId, responseUri);
+					async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, sessionTranscriptBytes: any) {
+						return keystore.generateDeviceResponseWithProximity(mdocCredential, presentationDefinition, sessionTranscriptBytes);
 					},
 				);
 				cont.register<IOpenID4VPRelyingPartyStateRepository>('OpenID4VPRelyingPartyStateRepository', OpenID4VPRelyingPartyStateRepository);
