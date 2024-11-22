@@ -7,7 +7,7 @@ import { startBLE } from "../utils/ble";
 
 export class MdocAppCommunication implements IMdocAppCommunication {
 	constructor(
-		private generateDeviceResponseFn: (mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) => Promise<{ deviceResponseMDoc: MDoc }>,
+		private generateDeviceResponseFn: (mdocCredential: MDoc, presentationDefinition: any, sessionTranscripBytes: any) => Promise<{ deviceResponseMDoc: MDoc }>,
 	) { }
 
 	ephemeralKey: CryptoKeyPair;
