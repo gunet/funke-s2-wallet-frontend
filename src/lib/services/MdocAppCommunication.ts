@@ -1,9 +1,12 @@
 import { IMdocAppCommunication } from "../interfaces/IMdocAppCommunication";
 import { cborEncode } from "../utils/cbor";
-import { DataItem } from "@auth0/mdl";
+import { DataItem, MDoc } from "@auth0/mdl";
 import { v4 as uuidv4 } from 'uuid';
 
 export class MdocAppCommunication implements IMdocAppCommunication {
+	constructor(
+		private generateDeviceResponseFn: (mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) => Promise<{ deviceResponseMDoc: MDoc }>,
+	) { }
 	async generateEngagementQR() {
 		console.log("Hello Engagement QR");
 

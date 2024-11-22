@@ -82,7 +82,11 @@ export const ContainerContextProvider = ({ children }) => {
 				const userData = userResponse.data;
 
 				cont.register<IHttpProxy>('HttpProxy', HttpProxy);
-				cont.register<IMdocAppCommunication>('MdocAppCommunication', MdocAppCommunication);
+				cont.register<IMdocAppCommunication>('MdocAppCommunication', MdocAppCommunication,
+					async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) {
+						return keystore.generateDeviceResponse(mdocCredential, presentationDefinition, mdocGeneratedNonce, verifierGeneratedNonce, clientId, responseUri);
+					},
+				);
 				cont.register<IOpenID4VPRelyingPartyStateRepository>('OpenID4VPRelyingPartyStateRepository', OpenID4VPRelyingPartyStateRepository);
 
 				cont.register<ICredentialParserRegistry>('CredentialParserRegistry', CredentialParserRegistry);
