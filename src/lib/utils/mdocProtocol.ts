@@ -46,7 +46,7 @@ export async function encryptMessage(sessionKey, plaintext) {
 	return { iv, ciphertext };
 }
 
-export async function decryptMessage(sessionKey, iv, ciphertext) {
+export async function decryptMessage(sessionKey, iv, ciphertext, uint8 = false) {
 	const dec = new TextDecoder();
 
 	const plaintext = await crypto.subtle.decrypt(
@@ -57,8 +57,11 @@ export async function decryptMessage(sessionKey, iv, ciphertext) {
 		sessionKey,
 		ciphertext
 	);
-
-	return dec.decode(plaintext);
+	if (uint8) {
+		return new Uint8Array(plaintext);
+	} else {
+		return dec.decode(plaintext);
+	}
 }
 
 export function hexToUint8Array(hexString) {
@@ -131,10 +134,10 @@ export async function getKey(keyMaterial, salt, info) {
 	);
 }
 
-export function getSessionTranscriptBytes(deviceEngagementBytes, eReaderKey) {
+export function getSessionTranscriptBytes(deviceEngagementBytes, eReaderKeyBytes) {
 	return cborEncode(DataItem.fromData([
 		deviceEngagementBytes, // DeviceEngagementBytes
-		DataItem.fromData(eReaderKey), // EReaderKeyBytes
+		eReaderKeyBytes, // EReaderKeyBytes
 		null,
 	]))
 }
