@@ -97,7 +97,7 @@ const Credential = () => {
 	];
 
 	const generateQR = async () => {
-		setMdocQRContent(await container.mdocAppCommunication.generateEngagementQR());
+		setMdocQRContent(await container.mdocAppCommunication.generateEngagementQR(vcEntity.credential));
 		setShowMdocQR(true);
 	};
 

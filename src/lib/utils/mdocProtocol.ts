@@ -30,9 +30,14 @@ export async function createSessionKey(rawPublic: ArrayBuffer, ephemeralKey: Cry
 	return sessionKey;
 }
 
-export async function encryptMessage(sessionKey, plaintext) {
-	const enc = new TextEncoder();
-	const iv = crypto.getRandomValues(new Uint8Array(12));
+export async function encryptMessage(sessionKey, plaintext, iv=null) {
+	// const enc = new TextEncoder();
+	if (!iv) {
+		iv = crypto.getRandomValues(new Uint8Array(12));
+	} else {
+		console.log('using iv:');
+		console.log(iv);
+	}
 
 	const ciphertext = await crypto.subtle.encrypt(
 		{
@@ -40,7 +45,8 @@ export async function encryptMessage(sessionKey, plaintext) {
 			iv: iv
 		},
 		sessionKey,
-		enc.encode(plaintext)
+		// enc.encode(plaintext)
+		plaintext
 	);
 
 	return { iv, ciphertext };
