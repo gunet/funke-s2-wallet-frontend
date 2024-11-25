@@ -5,7 +5,7 @@ import { varint } from 'multiformats';
 import * as KeyDidResolver from 'key-did-resolver'
 import { Resolver } from 'did-resolver'
 import * as didUtil from "@cef-ebsi/key-did-resolver/dist/util.js";
-import * as cbor from 'cbor-web';
+import * as cborWeb from 'cbor-web';
 
 import * as config from '../config';
 import type { DidKeyVersion } from '../config';
@@ -171,7 +171,7 @@ export type WebauthnPrfEncryptionKeyInfoV2 = (
 	WebauthnPrfSaltInfo
 	& WebauthnPrfEncryptionKeyDeriveKeyParams
 	& StaticEncapsulationInfo
-)
+);
 export function isPrfKeyV2(prfKeyInfo: WebauthnPrfEncryptionKeyInfo): prfKeyInfo is WebauthnPrfEncryptionKeyInfoV2 {
 	return (
 		"mainKey" in prfKeyInfo
@@ -334,6 +334,7 @@ function makeWebauthnSignFunction(
 					throw new Error("Canceled by user", { cause: eventResponse.cause ?? 'canceled_by_user' });
 
 				case 'success:ok':
+					uiStateMachine({ id: 'success:dismiss' });
 					return signature;
 
 				default:
@@ -470,7 +471,7 @@ export async function importMainKey(exportedMainKey: BufferSource): Promise<Cryp
 
 export async function openPrivateData(mainKeyOrExportedMainKey: CryptoKey | BufferSource, privateData: EncryptedContainer): Promise<[PrivateData, CryptoKey]> {
 	const mainKey = (
-		(mainKeyOrExportedMainKey instanceof CryptoKey)
+		("algorithm" in mainKeyOrExportedMainKey) // Check if it's a CryptoKey
 			? mainKeyOrExportedMainKey
 			: await importMainKey(mainKeyOrExportedMainKey)
 	);
@@ -960,7 +961,7 @@ export async function upgradePrfKey(
 	prfKeyInfo: WebauthnPrfEncryptionKeyInfoV1,
 	promptForPrfRetry: () => Promise<boolean | AbortSignal>,
 ): Promise<EncryptedContainer> {
-	const [prfKey,, prfCredential] = await getPrfKey(
+	const [prfKey, , prfCredential] = await getPrfKey(
 		{
 			...privateData,
 			prfKeys: privateData.prfKeys.filter((keyInfo) => (
@@ -1297,40 +1298,54 @@ async function generateCredentialKeypair(
 	}
 }
 
-async function addNewCredentialKeypair(
+async function addNewCredentialKeypairs(
 	[privateData, mainKey]: OpenedContainer,
 	didKeyVersion: DidKeyVersion,
 	deriveKid: (publicKey: CryptoKey, did: string) => Promise<string>,
+	numberOfKeyPairs: number = 1
 ): Promise<{
-	privateKey: CryptoKey,
-	keypair: CredentialKeyPair,
+	privateKeys: CryptoKey[],
+	keypairs: CredentialKeyPair[],
 	newPrivateData: OpenedContainer,
 }> {
-	const [publicKey, [privateKey, wrappedPrivateKeyOrRef]] = await generateCredentialKeypair([privateData, mainKey]);
-	const publicKeyJwk: JWK = await crypto.subtle.exportKey("jwk", publicKey) as JWK;
-	const did = await createDid(publicKey, didKeyVersion);
-	const kid = await deriveKid(publicKey, did);
+	const keypairsWithPrivateKeys = await Promise.all(Array.from({ length: numberOfKeyPairs }).map(async () => {
+		const [publicKey, [privateKey, wrappedPrivateKeyOrRef]] = await generateCredentialKeypair([privateData, mainKey]);
+		const publicKeyJwk: JWK = await crypto.subtle.exportKey("jwk", publicKey) as JWK;
+		const did = await createDid(publicKey, didKeyVersion);
+		const kid = await deriveKid(publicKey, did);
 
-	const keypair: CredentialKeyPair = {
-		kid,
-		did,
-		alg: "ES256",
-		publicKey: publicKeyJwk,
-		...wrappedPrivateKeyOrRef,
-	};
+		const keypair: CredentialKeyPair = {
+			kid,
+			did,
+			alg: "ES256",
+			publicKey: publicKeyJwk,
+			...wrappedPrivateKeyOrRef,
+		};
+
+		return { kid, keypair, privateKey };
+	}));
 
 	return {
-		privateKey,
-		keypair,
+		privateKeys: keypairsWithPrivateKeys.map((k) => k.privateKey),
+		keypairs: keypairsWithPrivateKeys.map((k) => k.keypair),
 		newPrivateData: await updatePrivateData(
 			[privateData, mainKey],
-			async (privateData: PrivateData) => ({
-				...privateData,
-				keypairs: {
-					...privateData.keypairs,
-					[kid]: keypair,
-				},
-			}),
+			async (privateData: PrivateData) => {
+
+				const combinedKeypairs = {
+					...privateData.keypairs
+				};
+
+				for (const { kid, keypair } of keypairsWithPrivateKeys) {
+					combinedKeypairs[kid] = keypair;
+				}
+				return {
+					...privateData,
+					keypairs: {
+						...combinedKeypairs
+					},
+				}
+			}
 		),
 	};
 }
@@ -1399,20 +1414,21 @@ export async function signJwtPresentation(
 	return { vpjwt: jws };
 }
 
-export async function generateOpenid4vciProof(
+export async function generateOpenid4vciProofs(
 	container: OpenedContainer,
 	didKeyVersion: DidKeyVersion,
 	nonce: string,
 	audience: string,
 	issuer: string,
+	numberOfKeyPairs: number,
 	uiStateMachine: (event: webauthn.WebauthnInteractionEvent) => Promise<webauthn.WebauthnInteractionEventResponse>,
-): Promise<[{ proof_jwt: string }, OpenedContainer]> {
+): Promise<[{ proof_jwts: string[] }, OpenedContainer]> {
 	const deriveKid = async (publicKey: CryptoKey) => {
 		const pubKey = await crypto.subtle.exportKey("jwk", publicKey);
 		const jwkThumbprint = await jose.calculateJwkThumbprint(pubKey as JWK, "sha256");
 		return jwkThumbprint;
 	};
-	const { privateKey, keypair, newPrivateData } = await addNewCredentialKeypair(container, didKeyVersion, deriveKid);
+	const { privateKeys, newPrivateData, keypairs } = await addNewCredentialKeypairs(container, didKeyVersion, deriveKid, numberOfKeyPairs);
 
 	const performSignature = async (signJwt: SignJWT, privateKey: CryptoKey, keypair: CredentialKeyPair) => {
 		if (privateKey) {
@@ -1429,20 +1445,27 @@ export async function generateOpenid4vciProof(
 		}
 	}
 
-	const signJwt = new SignJWT({
-		nonce: nonce,
-		aud: audience,
-		iss: issuer,
-	})
-		.setProtectedHeader({
-			alg: keypair.alg,
-			typ: "openid4vci-proof+jwt",
-			jwk: { ...keypair.publicKey, key_ops: ['verify'] } as JWK,
+	const proof_jwts = new Array(privateKeys.length);
+	// Can't use Promise.all here because performSignature may need to perform sequential WebAuthn ceremonies with user interaction
+	for (let index = 0; index < proof_jwts.length; ++index) {
+		const keypair = keypairs[index];
+		const privateKey = privateKeys[index];
+		const signJwt = new SignJWT({
+			nonce: nonce,
+			aud: audience,
+			iss: issuer,
 		})
-		.setIssuedAt();
+			.setProtectedHeader({
+				alg: keypair.alg,
+				typ: "openid4vci-proof+jwt",
+				jwk: { ...keypair.publicKey, key_ops: ['verify'] } as JWK,
+			})
+			.setIssuedAt();
 
-	const jws = await performSignature(signJwt, privateKey, keypair);
-	return [{ proof_jwt: jws }, newPrivateData];
+		proof_jwts[index] = await performSignature(signJwt, privateKey, keypair);
+	}
+
+	return [{ proof_jwts: proof_jwts }, newPrivateData];
 }
 
 function parseArkgSeedKeypair(credential: PublicKeyCredential): WebauthnSignArkgPublicSeed | null {
@@ -1450,7 +1473,7 @@ function parseArkgSeedKeypair(credential: PublicKeyCredential): WebauthnSignArkg
 	if (generatedKey) {
 		return {
 			credentialId: new Uint8Array(credential.rawId),
-			publicSeed: parseCoseKeyArkgPubSeed(cbor.decodeFirstSync(generatedKey.publicKey)),
+			publicSeed: parseCoseKeyArkgPubSeed(cborWeb.decodeFirstSync(generatedKey.publicKey)),
 		};
 	} else {
 		return null;

@@ -446,71 +446,64 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 			CommitCallback,
 		]> => (
 			await editPrivateData(async (originalContainer) => {
-				let container = originalContainer;
-				let proof_jwts = [];
+				const moveUiStateMachine = webauthnInteractionCtx.setup(
+					t("Sign credential issuance"),
+					state => {
+						switch (state.id) {
+							case 'intro':
+								return {
+									bodyText: t('To proceed, please authenticate with your passkey.'),
+									buttons: {
+										continue: 'intro:ok',
+									},
+								};
 
-				for (const { nonce, audience, issuer } of requests) {
+							case 'webauthn-begin':
+								return {
+									bodyText: t("Please interact with your authenticator..."),
+								};
 
-					const moveUiStateMachine = webauthnInteractionCtx.setup(
-						t("Sign credential issuance"),
-						state => {
-							switch (state.id) {
-								case 'intro':
-									return {
-										bodyText: t('To proceed, please authenticate with your passkey.'),
-										buttons: {
-											continue: 'intro:ok',
-										},
-									};
+							case 'err':
+								return {
+									bodyText: t("An error occurred!"),
+									buttons: {
+										retry: true,
+									},
+								};
 
-								case 'webauthn-begin':
-									return {
-										bodyText: t("Please interact with your authenticator..."),
-									};
+							case 'err:ext:sign:signature-not-found':
+								return {
+									bodyText: t("An error occurred: Signature not found."),
+									buttons: {
+										retry: true,
+									},
+								};
 
-								case 'err':
-									return {
-										bodyText: t("An error occurred!"),
-										buttons: {
-											retry: true,
-										},
-									};
+							case 'success':
+								return {
+									bodyText: t("Your credential has been issued successfully."),
+									buttons: {
+										continue: 'success:ok',
+									},
+								};
 
-								case 'err:ext:sign:signature-not-found':
-									return {
-										bodyText: t("An error occurred: Signature not found."),
-										buttons: {
-											retry: true,
-										},
-									};
+							default:
+								throw new Error('Unknown WebAuthn interaction state:', { cause: state });
+						}
+					},
+				);
 
-								case 'success':
-									return {
-										bodyText: t("Your credential has been issued successfully."),
-										buttons: {
-											continue: 'success:ok',
-										},
-									};
-
-								default:
-									throw new Error('Unknown WebAuthn interaction state:', { cause: state });
-							}
-						},
-					);
-
-					const [{ proof_jwt }, newContainer] = await keystore.generateOpenid4vciProof(
-						container,
-						config.DID_KEY_VERSION,
-						nonce,
-						audience,
-						issuer,
-						moveUiStateMachine,
-					);
-					moveUiStateMachine({ id: 'success:dismiss' });
-					proof_jwts.push(proof_jwt);
-					container = newContainer;
-				}
-				return [{ proof_jwts }, container];
+				const { nonce, audience, issuer } = requests[0]; // the first row is enough since the nonce remains the same
+				const [{ proof_jwts }, newContainer] = await keystore.generateOpenid4vciProofs(
+					originalContainer,
+					config.DID_KEY_VERSION,
+					nonce,
+					audience,
+					issuer,
+					requests.length,
+					moveUiStateMachine,
+				);
+				return [{ proof_jwts }, newContainer];
 			})
 		),
 	};
