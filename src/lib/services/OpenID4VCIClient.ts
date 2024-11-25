@@ -88,6 +88,9 @@ export class OpenID4VCIClient implements IOpenID4VCIClient {
 
 		const formData = new URLSearchParams();
 
+		console.log({ code_challenge, code_verifier })
+		console.log("Meta = ", this.config.credentialIssuerMetadata)
+		console.log("Conf id = ", credentialConfigurationId)
 		const selectedCredentialConfigurationSupported = this.config.credentialIssuerMetadata.credential_configurations_supported[credentialConfigurationId];
 		formData.append("scope", selectedCredentialConfigurationSupported.scope);
 

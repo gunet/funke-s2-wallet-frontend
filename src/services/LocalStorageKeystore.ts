@@ -8,6 +8,7 @@ import { useOnUserInactivity } from "../hooks/useOnUserInactivity";
 
 import * as keystore from "./keystore";
 import type { AsymmetricEncryptedContainer, AsymmetricEncryptedContainerKeys, EncryptedContainer, OpenedContainer, PrivateData, UnlockSuccess, WebauthnPrfEncryptionKeyInfo, WebauthnPrfSaltInfo, WrappedKeyInfo } from "./keystore";
+import { MDoc } from "@auth0/mdl";
 
 
 type UserData = {
@@ -72,6 +73,8 @@ export interface LocalStorageKeystore {
 		AsymmetricEncryptedContainer,
 		CommitCallback,
 	]>,
+
+	generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string): Promise<{ deviceResponseMDoc: MDoc }>,
 }
 
 /** A stateful wrapper around the keystore module, storing state in the browser's localStorage and sessionStorage. */
@@ -387,5 +390,10 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 				return [{ proof_jwts }, newContainer];
 			})
 		),
+
+		generateDeviceResponse: async (mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string): Promise<{ deviceResponseMDoc: MDoc }> => (
+			await keystore.generateDeviceResponse(await openPrivateData(), mdocCredential, presentationDefinition, mdocGeneratedNonce, verifierGeneratedNonce, clientId, responseUri)
+		),
+
 	};
 }
