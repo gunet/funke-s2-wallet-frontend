@@ -57,7 +57,7 @@ const Credential = () => {
 	}, [api, credentialId]);
 
 	useEffect(() => {
-		if (!vcEntity) {
+		if (!vcEntity || !container) {
 			return;
 		}
 		container.credentialParserRegistry.parse(vcEntity.credential).then((c) => {
@@ -111,10 +111,10 @@ const Credential = () => {
 			}
 		}
 
-		if (vcEntity?.credential) {
+		if (vcEntity?.credential && container) {
 			isItMdoc(vcEntity?.credential);
 		}
-	}, [vcEntity]);
+	}, [vcEntity, container]);
 
 
 	return (
@@ -157,7 +157,7 @@ const Credential = () => {
 				<div className='px-2 w-full'>
 					<CredentialDeleteButton onDelete={() => { setShowDeletePopup(true); }} />
 				</div>
-				{isCredentialMdoc && (<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>} Device Engagement QR</Button>)}
+				{isCredentialMdoc && (<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>}Present (Proximity)</Button>)}
 				<PopupLayout isOpen={showMdocQR}>
 					<QRCode value={mdocQRContent} />
 					<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
