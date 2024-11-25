@@ -3,6 +3,7 @@
   "version": "0.2.3",
   "private": true,
   "dependencies": {
+    "@auth0/mdl": "^1.5.1",
     "@cef-ebsi/key-did-resolver": "^1.1.0",
     "@sd-jwt/core": "^0.2.1",
     "@testing-library/jest-dom": "^5.16.5",
@@ -12,6 +13,8 @@
     "autoprefixer": "^10.4.14",
     "axios": "^1.4.0",
     "cbor-web": "^9.0.2",
+    "cbor-x": "^1.6.0",
+    "cose-kit": "^1.7.1",
     "did-resolver": "^4.1.0",
     "firebase": "^10.1.0",
     "i18next": "^23.2.11",
