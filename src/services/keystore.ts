@@ -1131,7 +1131,7 @@ export async function unlockPrf(
 export async function init(
 	mainKey: CryptoKey,
 	keyInfo: AsymmetricEncryptedContainerKeys,
-	credential: PublicKeyCredentialCreation,
+	credential: PublicKeyCredentialCreation | null,
 ): Promise<UnlockSuccess> {
 	const arkgSeed = parseArkgSeedKeypair(credential);
 	const privateData: EncryptedContainer = {
@@ -1503,8 +1503,8 @@ export async function generateDeviceResponse([privateData, mainKey]: [PrivateDat
 	return { deviceResponseMDoc };
 }
 
-function parseArkgSeedKeypair(credential: PublicKeyCredential): WebauthnSignArkgPublicSeed | null {
-	const generatedKey = credential.getClientExtensionResults()?.sign?.generatedKey;
+function parseArkgSeedKeypair(credential: PublicKeyCredential | null): WebauthnSignArkgPublicSeed | null {
+	const generatedKey = credential?.getClientExtensionResults()?.sign?.generatedKey;
 	if (generatedKey) {
 		return {
 			credentialId: new Uint8Array(credential.rawId),
