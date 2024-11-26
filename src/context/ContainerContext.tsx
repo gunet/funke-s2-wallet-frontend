@@ -17,6 +17,8 @@ import { OpenID4VPRelyingPartyStateRepository } from "../lib/services/OpenID4VPR
 import SessionContext from "../context/SessionContext";
 import { ICredentialParserRegistry } from "../lib/interfaces/ICredentialParser";
 import { CredentialParserRegistry } from "../lib/services/CredentialParserRegistry";
+import { IMdocAppCommunication } from "../lib/interfaces/IMdocAppCommunication";
+import { MdocAppCommunication } from "../lib/services/MdocAppCommunication";
 import { parseSdJwtCredential } from "../functions/parseSdJwtCredential";
 import { generateRandomIdentifier } from "../lib/utils/generateRandomIdentifier";
 import defaultCredentialImage from "../assets/images/cred.png";
@@ -35,6 +37,7 @@ export type ContainerContextValue = {
 	openID4VCIHelper: IOpenID4VCIHelper,
 	openID4VCIClients: { [x: string]: IOpenID4VCIClient },
 	credentialParserRegistry: ICredentialParserRegistry,
+	mdocAppCommunication: IMdocAppCommunication
 }
 
 const ContainerContext: React.Context<ContainerContextValue> = createContext({
@@ -43,6 +46,7 @@ const ContainerContext: React.Context<ContainerContextValue> = createContext({
 	openID4VCIHelper: null,
 	openID4VCIClients: {},
 	credentialParserRegistry: null,
+	mdocAppCommunication: null
 });
 
 const defaultLocale = 'en-US';
@@ -87,6 +91,11 @@ export const ContainerContextProvider = ({ children }) => {
 				const userData = userResponse.data;
 
 				cont.register<IHttpProxy>('HttpProxy', HttpProxy);
+				cont.register<IMdocAppCommunication>('MdocAppCommunication', MdocAppCommunication,
+					async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, sessionTranscriptBytes: any) {
+						return keystore.generateDeviceResponseWithProximity(mdocCredential, presentationDefinition, sessionTranscriptBytes);
+					},
+				);
 				cont.register<IOpenID4VPRelyingPartyStateRepository>('OpenID4VPRelyingPartyStateRepository', OpenID4VPRelyingPartyStateRepository);
 
 				cont.register<ICredentialParserRegistry>('CredentialParserRegistry', CredentialParserRegistry);
@@ -281,6 +290,7 @@ export const ContainerContextProvider = ({ children }) => {
 				);
 
 				const httpProxy = cont.resolve<IHttpProxy>('HttpProxy');
+				const mdocAppCommunication = cont.resolve<IMdocAppCommunication>('MdocAppCommunication');
 				const openID4VCIHelper = cont.resolve<IOpenID4VCIHelper>('OpenID4VCIHelper');
 
 				const openID4VPRelyingParty = cont.resolve<IOpenID4VPRelyingParty>('OpenID4VPRelyingParty');
@@ -317,6 +327,7 @@ export const ContainerContextProvider = ({ children }) => {
 					openID4VCIClients: openID4VCIClientsJson,
 					openID4VPRelyingParty,
 					httpProxy,
+					mdocAppCommunication,
 					openID4VCIHelper,
 					credentialParserRegistry,
 				});
