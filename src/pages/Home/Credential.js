@@ -37,7 +37,7 @@ const Credential = () => {
 	const screenType = useScreenType();
 	const [activeTab, setActiveTab] = useState(0);
 	const [showMdocQR, setShowMdocQR] = useState(false);
-	const [isCredentialMdoc, setIsCredentialMdoc] = useState(false);
+	const [shareWithQr, setShareWithQr] = useState(false);
 	const [mdocQRContent, setMdocQRContent] = useState("");
 	const navigate = useNavigate();
 	const { t } = useTranslation();
@@ -102,17 +102,21 @@ const Credential = () => {
 	};
 
 	useEffect(() => {
-		async function isItMdoc(credential) {
+		async function canWeShareQR(credential) {
+			if (!window.nativeWrapper) {
+				setShareWithQr(false);
+				return;
+			}
 			const mdoc = await container.credentialParserRegistry.parse(credential);
 			if (mdoc?.parsedBy === 'mdocPIDParser') {
-				setIsCredentialMdoc(true);
+				setShareWithQr(true);
 			} else {
-				setIsCredentialMdoc(false);
+				setShareWithQr(false);
 			}
 		}
 
 		if (vcEntity?.credential && container) {
-			isItMdoc(vcEntity?.credential);
+			canWeShareQR(vcEntity?.credential);
 		}
 	}, [vcEntity, container]);
 
@@ -157,7 +161,7 @@ const Credential = () => {
 				<div className='px-2 w-full'>
 					<CredentialDeleteButton onDelete={() => { setShowDeletePopup(true); }} />
 				</div>
-				{isCredentialMdoc && (<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>}Present (Proximity)</Button>)}
+				{shareWithQr && (<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>}Share using QR Code</Button>)}
 				<PopupLayout isOpen={showMdocQR}>
 					<QRCode value={mdocQRContent} />
 					<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
