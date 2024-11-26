@@ -3,7 +3,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import QRCode from "react-qr-code";
-import { BsQrCode } from "react-icons/bs";
+import { BsQrCode, BsCheckCircle } from "react-icons/bs";
 
 // Contexts
 import SessionContext from '../../context/SessionContext';
@@ -23,6 +23,7 @@ import DeletePopup from '../../components/Popups/DeletePopup';
 import Button from '../../components/Buttons/Button';
 import CredentialLayout from '../../components/Credentials/CredentialLayout';
 import PopupLayout from '../../components/Popups/PopupLayout';
+import Spinner from '../../components/Shared/Spinner';
 
 const Credential = () => {
 	const { credentialId } = useParams();
@@ -37,6 +38,7 @@ const Credential = () => {
 	const screenType = useScreenType();
 	const [activeTab, setActiveTab] = useState(0);
 	const [showMdocQR, setShowMdocQR] = useState(false);
+	const [mdocQRStatus, setMdocQRStatus] = useState(0); // 0 init; 1 loading; 2 finished;
 	const [shareWithQr, setShareWithQr] = useState(false);
 	const [mdocQRContent, setMdocQRContent] = useState("");
 	const navigate = useNavigate();
@@ -97,9 +99,18 @@ const Credential = () => {
 	];
 
 	const generateQR = async () => {
+		setMdocQRStatus(0);
 		setMdocQRContent(await container.mdocAppCommunication.generateEngagementQR(vcEntity.credential));
 		setShowMdocQR(true);
+		await container.mdocAppCommunication.startClient();
+		setMdocQRStatus(1);
+		await container.mdocAppCommunication.communicationSubphase();
+		setMdocQRStatus(2);
 	};
+
+	useEffect(() => {
+		console.log("Triggered transaction thing: ", container.mdocAppCommunication.transactionPending)
+	}, [container.mdocAppCommunication])
 
 	useEffect(() => {
 		async function canWeShareQR(credential) {
@@ -161,12 +172,20 @@ const Credential = () => {
 				<div className='px-2 w-full'>
 				{shareWithQr && (<Button variant='primary' additionalClassName='w-full my-2' onClick={generateQR}>{<span className='px-1'><BsQrCode/></span>}Share using QR Code</Button>)}
 					<PopupLayout isOpen={showMdocQR}>
-						{mdocQRContent ? 
-							<QRCode value={mdocQRContent} />
-							:
-							<p>Could not initialize BLE communication. Please check your permissions and reload this page.</p>
-						}
-						<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
+					<div className="flex items-start justify-between mb-2">
+						<h2 className="text-lg font-bold text-blue-500">
+							Share using QRCode
+						</h2>
+						</div>
+						<hr className="mb-2 border-t border-blue-500/80" />
+						<span>
+								{mdocQRStatus === 0 && <span className='flex items-center justify-center'><QRCode value={mdocQRContent} /></span>}
+								{mdocQRStatus === 1 && <span className='max-100-px'>Communicating with verifier...</span>}
+								{mdocQRStatus === 2 && <span className='flex items-center justify-center'><BsCheckCircle color='green' size={100}/></span>}
+						</span>
+						<div className="flex justify-end space-x-2 pt-4">
+								{mdocQRStatus !== 1 && <Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>}
+					</div>
 					</PopupLayout>
 				</div>
 				<div className='px-2 pt-2 w-full'>

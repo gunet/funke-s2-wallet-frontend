@@ -12,6 +12,9 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 	) { }
 
 	ephemeralKey: CryptoKeyPair;
+	uuid: string;
+	deviceEngagementBytes: any;
+	credential: any;
 	
 	async generateEngagementQR(credential :any) {
 		const keyPair = await crypto.subtle.generateKey(
@@ -34,35 +37,49 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 
 		const cbor = cborEncode(deviceEngagement);
 
-		this.communicationSubphase(uuid, DataItem.fromData(deviceEngagement), credential);
+		this.uuid = uuid;
+		this.deviceEngagementBytes = DataItem.fromData(deviceEngagement);
+		this.credential = credential;
+
 		return `mdoc:${uint8ArrayToBase64Url(cbor)}`;
 	}
 
-	async communicationSubphase(uuid: string, deviceEngagementBytes: any, credential: any): Promise<void> {
+	async startClient() :Promise<boolean> {
+		/* @ts-ignore */
+		if (window.nativeWrapper) {
+			try {
+				/* @ts-ignore */
+				const client = await window.nativeWrapper.bluetoothCreateClient(this.uuid);
+				return client;
+			} catch(e) {
+				console.log("Could not initialize BLE client");
+				return false;
+			}
+		} else {
+			return false;
+		}
+	}
+
+	async communicationSubphase(): Promise<void> {
 		let aggregatedData = [];
 		let assumedChunkSize = 20;
 		/* @ts-ignore */
 		if (window.nativeWrapper) {
-			console.log("Found wrapper");
-			/* @ts-ignore */
-			const client = await window.nativeWrapper.bluetoothCreateClient(uuid);
-			if (client) {
-				console.log("Created BLE client");
-				try {
-					let dataReceived = [1];
-					while(dataReceived[0] === 1) {
-						/* @ts-ignore */
-						dataReceived = JSON.parse(await window.nativeWrapper.bluetoothReceiveFromServer());
-						assumedChunkSize = Math.max(assumedChunkSize, dataReceived.length);
-						console.log("Data received");
-						console.log(dataReceived);
-						aggregatedData = [...aggregatedData, ...dataReceived.slice(1)];
-						console.log(dataReceived[0]);
-					}
-				} catch(e) {
-					console.log("Error receiving");
-					console.log(e);
+			console.log("Created BLE client");
+			try {
+				let dataReceived = [1];
+				while(dataReceived[0] === 1) {
+					/* @ts-ignore */
+					dataReceived = JSON.parse(await window.nativeWrapper.bluetoothReceiveFromServer());
+					assumedChunkSize = Math.max(assumedChunkSize, dataReceived.length);
+					console.log("Data received");
+					console.log(dataReceived);
+					aggregatedData = [...aggregatedData, ...dataReceived.slice(1)];
+					console.log(dataReceived[0]);
 				}
+			} catch(e) {
+				console.log("Error receiving");
+				console.log(e);
 			}
 		}
 		console.log('Assumed chunk size: ', assumedChunkSize);
@@ -80,7 +97,7 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 		}
 		const verifierPublicKey = await crypto.subtle.importKey("jwk", verifierJWK, {name: "ECDH", namedCurve: "P-256"}, true, []);
 		const sessionTranscriptBytes = getSessionTranscriptBytes(
-			deviceEngagementBytes, // DeviceEngagementBytes
+			this.deviceEngagementBytes, // DeviceEngagementBytes
 			decoded.get('eReaderKey'), // EReaderKeyBytes
 		);
 		const zab = await deriveSharedSecret(this.ephemeralKey.privateKey, verifierPublicKey);
@@ -144,7 +161,7 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 			}
 
 			const presentationDefinition = fullPEX;
-			const credentialBytes = base64url.decode(credential);
+			const credentialBytes = base64url.decode(this.credential);
 			const issuerSigned = cborDecode(credentialBytes);
 			// const descriptor = presentationDefinition.input_descriptors.filter((desc) => desc.id === descriptor_id)[0];
 			const descriptor = {"id": "eu.europa.ec.eudi.pid.1"}
@@ -190,8 +207,10 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 			/* @ts-ignore */
 			const send = await nativeWrapper.bluetoothSendToServer(JSON.stringify([0, ...toSendBytes]));
 			console.log(send);
-
 		}
+		/* @ts-ignore */
+		await nativeWrapper.bluetoothTerminate();
+
 		return;
 	}
 }
