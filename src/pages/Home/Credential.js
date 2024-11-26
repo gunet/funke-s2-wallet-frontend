@@ -161,7 +161,11 @@ const Credential = () => {
 				<div className='px-2 w-full'>
 				{shareWithQr && (<Button variant='primary' additionalClassName='w-full my-2' onClick={generateQR}>{<span className='px-1'><BsQrCode/></span>}Share using QR Code</Button>)}
 					<PopupLayout isOpen={showMdocQR}>
-						<QRCode value={mdocQRContent} />
+						{mdocQRContent ? 
+							<QRCode value={mdocQRContent} />
+							:
+							<p>Could not initialize BLE communication. Please check your permissions and reload this page.</p>
+						}
 						<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
 					</PopupLayout>
 				</div>
