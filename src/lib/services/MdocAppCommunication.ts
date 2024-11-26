@@ -30,8 +30,8 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 		const publicKeyJWK = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
 
 
-		// const uuid = uuidv4()
-		const uuid =  '00179c7a-eec6-4f88-8646-045fda9ac4d8'
+		const uuid = uuidv4();
+		// const uuid =  '00179c7a-eec6-4f88-8646-045fda9ac4d8'
 		
 		const deviceEngagement = getDeviceEngagement(uuid, publicKeyJWK);
 
