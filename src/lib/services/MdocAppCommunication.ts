@@ -62,7 +62,7 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 
 	async communicationSubphase(): Promise<void> {
 		let aggregatedData = [];
-		let assumedChunkSize = 20;
+		let assumedChunkSize = 512;
 		/* @ts-ignore */
 		if (window.nativeWrapper) {
 			console.log("Created BLE client");
@@ -71,7 +71,7 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 				while(dataReceived[0] === 1) {
 					/* @ts-ignore */
 					dataReceived = JSON.parse(await window.nativeWrapper.bluetoothReceiveFromServer());
-					assumedChunkSize = Math.max(assumedChunkSize, dataReceived.length);
+					// assumedChunkSize = Math.max(assumedChunkSize, dataReceived.length);
 					console.log("Data received");
 					console.log(dataReceived);
 					aggregatedData = [...aggregatedData, ...dataReceived.slice(1)];
@@ -194,8 +194,8 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 			}
 
 			const sessionDataEncoded = cborEncode(sessionData);
-
 			let toSendBytes = Array.from(sessionDataEncoded);
+			console.log("To send length: ", toSendBytes.length);
 			while (toSendBytes.length > (assumedChunkSize - 1)){
 				const chunk = [1, ...toSendBytes.slice(0, (assumedChunkSize - 1))]
 				console.log(chunk);

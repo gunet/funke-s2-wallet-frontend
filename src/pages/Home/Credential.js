@@ -102,10 +102,14 @@ const Credential = () => {
 		setMdocQRStatus(0);
 		setMdocQRContent(await container.mdocAppCommunication.generateEngagementQR(vcEntity.credential));
 		setShowMdocQR(true);
-		await container.mdocAppCommunication.startClient();
-		setMdocQRStatus(1);
-		await container.mdocAppCommunication.communicationSubphase();
-		setMdocQRStatus(2);
+		const client = await container.mdocAppCommunication.startClient();
+		if (!client) {
+			setMdocQRStatus(-1);
+		} else {
+			setMdocQRStatus(1);
+			await container.mdocAppCommunication.communicationSubphase();
+			setMdocQRStatus(2);
+		}
 	};
 
 	useEffect(() => {
@@ -179,8 +183,12 @@ const Credential = () => {
 						</div>
 						<hr className="mb-2 border-t border-blue-500/80" />
 						<span>
+								{mdocQRStatus === -1 && 
+									<span>
+										We couldn't access nearby device features. Please enable nearby devices permissions in your settings and restart the app to "Share with QRCode".
+									</span>}
 								{mdocQRStatus === 0 && <span className='flex items-center justify-center'><QRCode value={mdocQRContent} /></span>}
-								{mdocQRStatus === 1 && <span className='max-100-px'>Communicating with verifier...</span>}
+								{mdocQRStatus === 1 && <span>Communicating with verifier...</span>}
 								{mdocQRStatus === 2 && <span className='flex items-center justify-center'><BsCheckCircle color='green' size={100}/></span>}
 						</span>
 						<div className="flex justify-end space-x-2 pt-4">
