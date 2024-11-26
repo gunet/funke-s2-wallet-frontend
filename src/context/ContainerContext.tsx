@@ -17,6 +17,8 @@ import { OpenID4VPRelyingPartyStateRepository } from "../lib/services/OpenID4VPR
 import SessionContext from "../context/SessionContext";
 import { ICredentialParserRegistry } from "../lib/interfaces/ICredentialParser";
 import { CredentialParserRegistry } from "../lib/services/CredentialParserRegistry";
+import { IMdocAppCommunication } from "../lib/interfaces/IMdocAppCommunication";
+import { MdocAppCommunication } from "../lib/services/MdocAppCommunication";
 import { parseSdJwtCredential } from "../functions/parseSdJwtCredential";
 import { generateRandomIdentifier } from "../lib/utils/generateRandomIdentifier";
 import defaultCredentialImage from "../assets/images/cred.png";
@@ -25,6 +27,9 @@ import renderCustomSvgTemplate from "../components/Credentials/RenderCustomSvgTe
 import StatusContext from "./StatusContext";
 import { getSdJwtVcMetadata } from "../lib/utils/getSdJwtVcMetadata";
 import { CredentialBatchHelper } from "../lib/services/CredentialBatchHelper";
+import { MDoc } from "@auth0/mdl";
+import {deviceResponseParser, mdocPIDParser } from "../lib/utils/mdocPIDParser";
+import {PidParser } from "../lib/utils/PidParser";
 
 export type ContainerContextValue = {
 	httpProxy: IHttpProxy,
@@ -32,6 +37,7 @@ export type ContainerContextValue = {
 	openID4VCIHelper: IOpenID4VCIHelper,
 	openID4VCIClients: { [x: string]: IOpenID4VCIClient },
 	credentialParserRegistry: ICredentialParserRegistry,
+	mdocAppCommunication: IMdocAppCommunication
 }
 
 const ContainerContext: React.Context<ContainerContextValue> = createContext({
@@ -40,6 +46,7 @@ const ContainerContext: React.Context<ContainerContextValue> = createContext({
 	openID4VCIHelper: null,
 	openID4VCIClients: {},
 	credentialParserRegistry: null,
+	mdocAppCommunication: null
 });
 
 const defaultLocale = 'en-US';
@@ -84,6 +91,11 @@ export const ContainerContextProvider = ({ children }) => {
 				const userData = userResponse.data;
 
 				cont.register<IHttpProxy>('HttpProxy', HttpProxy);
+				cont.register<IMdocAppCommunication>('MdocAppCommunication', MdocAppCommunication,
+					async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, sessionTranscriptBytes: any) {
+						return keystore.generateDeviceResponseWithProximity(mdocCredential, presentationDefinition, sessionTranscriptBytes);
+					},
+				);
 				cont.register<IOpenID4VPRelyingPartyStateRepository>('OpenID4VPRelyingPartyStateRepository', OpenID4VPRelyingPartyStateRepository);
 
 				cont.register<ICredentialParserRegistry>('CredentialParserRegistry', CredentialParserRegistry);
@@ -100,6 +112,9 @@ export const ContainerContextProvider = ({ children }) => {
 				)
 				const credentialParserRegistry = cont.resolve<ICredentialParserRegistry>('CredentialParserRegistry');
 
+				credentialParserRegistry.addParser(PidParser);
+				credentialParserRegistry.addParser(deviceResponseParser);
+				credentialParserRegistry.addParser(mdocPIDParser);
 				credentialParserRegistry.addParser({
 					async parse(rawCredential) {
 
@@ -226,7 +241,11 @@ export const ContainerContextProvider = ({ children }) => {
 							audience,
 							issuanceDate: new Date().toISOString(),
 						});
-					}
+					},
+
+					async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string) {
+						return keystore.generateDeviceResponse(mdocCredential, presentationDefinition, mdocGeneratedNonce, verifierGeneratedNonce, clientId, responseUri);
+					},
 				);
 
 				cont.register<OpenID4VCIClientFactory>('OpenID4VCIClientFactory', OpenID4VCIClientFactory,
@@ -243,9 +262,35 @@ export const ContainerContextProvider = ({ children }) => {
 							credentials: cList
 						});
 					},
+
+					async function authorizationRequestModifier(credentialIssuerIdentifier: string, url: string, request_uri?: string, client_id?: string) {
+						if (!credentialIssuerIdentifier.startsWith(process.env.REACT_APP_PID_CREDENTIAL_ISSUER_IDENTIFIER)) {
+							return { url };
+						}
+						const isMobile = window.innerWidth <= 480;
+						const eIDClientURL = isMobile ? process.env.REACT_APP_OPENID4VCI_EID_CLIENT_URL.replace('http', 'eid') : process.env.REACT_APP_OPENID4VCI_EID_CLIENT_URL;
+						console.log("Eid client url = ", eIDClientURL)
+						const urlObj = new URL(url);
+						// Construct the base URL
+						const baseUrl = `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
+
+						// Parameters
+						// Encode parameters
+						const encodedClientId = encodeURIComponent(client_id);
+						const encodedRequestUri = encodeURIComponent(request_uri);
+						const tcTokenURL = `${baseUrl}?client_id=${encodedClientId}&request_uri=${encodedRequestUri}`;
+
+						const newLoc = `${eIDClientURL}?tcTokenURL=${encodeURIComponent(tcTokenURL)}`
+
+						console.log("new loc = ", newLoc)
+						return {
+							url: newLoc
+						};
+					},
 				);
 
 				const httpProxy = cont.resolve<IHttpProxy>('HttpProxy');
+				const mdocAppCommunication = cont.resolve<IMdocAppCommunication>('MdocAppCommunication');
 				const openID4VCIHelper = cont.resolve<IOpenID4VCIHelper>('OpenID4VCIHelper');
 
 				const openID4VPRelyingParty = cont.resolve<IOpenID4VPRelyingParty>('OpenID4VPRelyingParty');
@@ -282,6 +327,7 @@ export const ContainerContextProvider = ({ children }) => {
 					openID4VCIClients: openID4VCIClientsJson,
 					openID4VPRelyingParty,
 					httpProxy,
+					mdocAppCommunication,
 					openID4VCIHelper,
 					credentialParserRegistry,
 				});
