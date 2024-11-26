@@ -113,7 +113,11 @@ const Credential = () => {
 	};
 
 	useEffect(() => {
-		async function isItMdoc(vcEntity) {
+		async function shareEligible(vcEntity) {
+			if (!window.nativeWrapper) {
+				setShareWithQr(false);
+				return;
+			}
 			if (vcEntity.format == "mso_mdoc") {
 				setShareWithQr(true);
 			} else {
@@ -122,7 +126,7 @@ const Credential = () => {
 		}
 
 		if (vcEntity) {
-			isItMdoc(vcEntity);
+			shareEligible(vcEntity);
 		}
 	}, [vcEntity, container]);
 
