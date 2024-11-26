@@ -113,25 +113,16 @@ const Credential = () => {
 	};
 
 	useEffect(() => {
-		console.log("Triggered transaction thing: ", container.mdocAppCommunication.transactionPending)
-	}, [container.mdocAppCommunication])
-
-	useEffect(() => {
-		async function canWeShareQR(credential) {
-			if (!window.nativeWrapper) {
-				setShareWithQr(false);
-				return;
-			}
-			const mdoc = await container.credentialParserRegistry.parse(credential);
-			if (mdoc?.parsedBy === 'mdocPIDParser') {
+		async function isItMdoc(vcEntity) {
+			if (vcEntity.format == "mso_mdoc") {
 				setShareWithQr(true);
 			} else {
 				setShareWithQr(false);
 			}
 		}
 
-		if (vcEntity?.credential && container) {
-			canWeShareQR(vcEntity?.credential);
+		if (vcEntity) {
+			isItMdoc(vcEntity);
 		}
 	}, [vcEntity, container]);
 
