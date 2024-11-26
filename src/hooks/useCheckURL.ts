@@ -41,7 +41,7 @@ function useCheckURL(urlToCheck: string): {
 		async function handle(urlToCheck: string) {
 			const userHandleB64u = keystore.getUserHandleB64u();
 			if (!userHandleB64u) {
-				throw new Error("User handle could not be extracted from keystore");
+				return;
 			}
 			const u = new URL(urlToCheck);
 			if (u.protocol === 'openid-credential-offer' || u.searchParams.get('credential_offer') || u.searchParams.get('credential_offer_uri')) {
@@ -78,11 +78,6 @@ function useCheckURL(urlToCheck: string): {
 					if ('err' in result) {
 						if (result.err === HandleAuthorizationRequestError.INSUFFICIENT_CREDENTIALS) {
 							setTextMessagePopup({ title: `${t('messagePopup.insufficientCredentials.title')}`, description: `${t('messagePopup.insufficientCredentials.description')}` });
-							setTypeMessagePopup('error');
-							setMessagePopup(true);
-						}
-						else if (result.err === HandleAuthorizationRequestError.ONLY_ONE_INPUT_DESCRIPTOR_IS_SUPPORTED) {
-							setTextMessagePopup({ title: `${t('messagePopup.onlyOneInputDescriptor.title')}`, description: `${t('messagePopup.onlyOneInputDescriptor.description')}` });
 							setTypeMessagePopup('error');
 							setMessagePopup(true);
 						}

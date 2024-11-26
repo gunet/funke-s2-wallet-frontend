@@ -10,7 +10,6 @@ import CredentialsContext from '../../context/CredentialsContext';
 // Hooks
 import useFetchPresentations from '../../hooks/useFetchPresentations';
 import useScreenType from '../../hooks/useScreenType';
-import { useSessionStorage } from '../../hooks/useStorage';
 
 // Components
 import { H1 } from '../../components/Shared/Heading';
@@ -20,10 +19,9 @@ import HistoryList from '../../components/History/HistoryList';
 import Slider from '../../components/Shared/Slider';
 
 const Home = () => {
-	const { vcEntityList, latestCredentials, getData } = useContext(CredentialsContext);
+	const { vcEntityList, vcEntityListInstances, latestCredentials, getData, currentSlide, setCurrentSlide } = useContext(CredentialsContext);
 	const { api } = useContext(SessionContext);
 	const history = useFetchPresentations(api);
-	const [currentSlide, setCurrentSlide,] = api.useClearOnClearSession(useSessionStorage('currentSlide', 1));
 	const screenType = useScreenType();
 
 	const navigate = useNavigate();
@@ -44,13 +42,13 @@ const Home = () => {
 	const renderSlideContent = (vcEntity) => (
 		<button
 			key={vcEntity.id}
-			className={`relative rounded-xl w-full overflow-hidden transition-shadow shadow-md hover:shadow-lg cursor-pointer ${latestCredentials.has(vcEntity.id) ? 'fade-in' : ''}`}
+			className={`relative rounded-xl w-full transition-shadow shadow-md hover:shadow-lg cursor-pointer ${latestCredentials.has(vcEntity.id) ? 'fade-in' : ''}`}
 			onClick={() => handleImageClick(vcEntity)}
 			aria-label={`${vcEntity.friendlyName}`}
 			tabIndex={currentSlide !== vcEntityList.indexOf(vcEntity) + 1 ? -1 : 0}
 			title={t('pageCredentials.credentialFullScreenTitle', { friendlyName: vcEntity.friendlyName })}
 		>
-			<CredentialImage credential={vcEntity.credential} className={`w-full h-full rounded-xl ${latestCredentials.has(vcEntity.id) ? 'highlight-filter' : ''}`} />
+			<CredentialImage vcEntityInstances={vcEntityListInstances?.filter((vc) => vc.credentialIdentifier === vcEntity.credentialIdentifier)} showRibbon={currentSlide === vcEntityList.indexOf(vcEntity) + 1} credential={vcEntity.credential} className={`w-full h-full object-cover rounded-xl ${latestCredentials.has(vcEntity.id) ? 'highlight-filter' : ''}`} />
 		</button>
 	);
 
@@ -91,15 +89,19 @@ const Home = () => {
 								</>
 							) : (
 								<div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 md:gap-5 lg:gap-10 lg:grid-cols-2 xl:grid-cols-3">
-									{vcEntityList.map((vcEntity) => (
+									{vcEntityListInstances && vcEntityList.map((vcEntity) => (
 										<button
 											key={vcEntity.id}
-											className={`relative rounded-xl overflow-hidden transition-shadow shadow-md hover:shadow-lg cursor-pointer ${latestCredentials.has(vcEntity.id) ? 'highlight-border fade-in' : ''}`}
+											className={`relative rounded-xl transition-shadow shadow-md hover:shadow-lg cursor-pointer ${latestCredentials.has(vcEntity.id) ? 'highlight-border fade-in' : ''}`}
 											onClick={() => handleImageClick(vcEntity)}
 											aria-label={`${vcEntity.friendlyName}`}
 											title={t('pageCredentials.credentialDetailsTitle', { friendlyName: vcEntity.friendlyName })}
 										>
-											<CredentialImage credential={vcEntity.credential} className={`w-full h-full object-cover rounded-xl ${latestCredentials.has(vcEntity.id) ? 'highlight-filter' : ''}`} />
+												<CredentialImage
+													vcEntityInstances={vcEntityListInstances?.filter((vc) => vc.credentialIdentifier === vcEntity.credentialIdentifier)}
+													credential={vcEntity.credential}
+													className={`w-full h-full object-cover rounded-xl ${latestCredentials.has(vcEntity.id) ? 'highlight-filter' : ''}`}
+												/>
 										</button>
 									))}
 									<AddCredentialCard onClick={handleAddCredential} />
