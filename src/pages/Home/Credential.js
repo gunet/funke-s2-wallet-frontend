@@ -159,13 +159,15 @@ const Credential = () => {
 					)}
 				</div>
 				<div className='px-2 w-full'>
+				{shareWithQr && (<Button variant='primary' additionalClassName='w-full my-2' onClick={generateQR}>{<span className='px-1'><BsQrCode/></span>}Share using QR Code</Button>)}
+					<PopupLayout isOpen={showMdocQR}>
+						<QRCode value={mdocQRContent} />
+						<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
+					</PopupLayout>
+				</div>
+				<div className='px-2 pt-2 w-full'>
 					<CredentialDeleteButton onDelete={() => { setShowDeletePopup(true); }} />
 				</div>
-				{shareWithQr && (<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>}Share using QR Code</Button>)}
-				<PopupLayout isOpen={showMdocQR}>
-					<QRCode value={mdocQRContent} />
-					<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
-				</PopupLayout>
 				{/* Delete Credential Popup */}
 				{showDeletePopup && vcEntity && (
 					<DeletePopup
