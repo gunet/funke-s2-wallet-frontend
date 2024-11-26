@@ -47,3 +47,4 @@ ssl_keys/*
 .npmrc
 
 variables.vars
+.env.prod
