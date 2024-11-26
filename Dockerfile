@@ -3,6 +3,7 @@ FROM node:21-bullseye-slim AS builder-base
 WORKDIR /home/node/app
 
 # Install dependencies first so rebuild of these layers is only needed when dependencies change
+COPY lib/ ./lib/
 COPY package.json yarn.lock .
 COPY .env.prod .env
 RUN yarn cache clean -f && yarn install
@@ -12,7 +13,7 @@ FROM builder-base AS test
 
 COPY . .
 COPY .env.prod .env
-RUN npm run vitest
+RUN SLOW_TESTS=true npm run vitest
 
 
 FROM builder-base AS builder

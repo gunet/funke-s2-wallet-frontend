@@ -12,12 +12,13 @@
     "asn1js": "^3.0.5",
     "autoprefixer": "^10.4.14",
     "axios": "^1.4.0",
+    "cbor-web": "^9.0.2",
     "cbor-x": "^1.6.0",
     "cose-kit": "^1.7.1",
     "did-resolver": "^4.1.0",
     "firebase": "^10.1.0",
     "i18next": "^23.2.11",
-    "jose": "^4.14.4",
+    "jose": "./lib/jose",
     "js-cookie": "^3.0.5",
     "jsonpath-plus": "^9.0.0",
     "jsonpointer": "^5.0.1",
@@ -68,8 +69,8 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "vitest": "VITE_CJS_IGNORE_WARNING=true vitest run",
-    "vitest-start": "VITE_CJS_IGNORE_WARNING=true vitest"
+    "vitest": "VITE_CJS_IGNORE_WARNING=true vitest run src/",
+    "vitest-start": "VITE_CJS_IGNORE_WARNING=true vitest src/"
   },
   "eslintConfig": {
     "extends": [

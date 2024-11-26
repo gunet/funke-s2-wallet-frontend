@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useContext, useEffect } from "react";
 
 import * as config from "../config";
 import { useClearStorages, useLocalStorage, useSessionStorage } from "../hooks/useStorage";
@@ -7,7 +7,10 @@ import { useIndexedDb } from "../hooks/useIndexedDb";
 import { useOnUserInactivity } from "../hooks/useOnUserInactivity";
 
 import * as keystore from "./keystore";
-import type { AsymmetricEncryptedContainer, AsymmetricEncryptedContainerKeys, EncryptedContainer, OpenedContainer, PrivateData, UnlockSuccess, WebauthnPrfEncryptionKeyInfo, WebauthnPrfSaltInfo, WrappedKeyInfo } from "./keystore";
+import type { AsymmetricEncryptedContainer, AsymmetricEncryptedContainerKeys, EncryptedContainer, OpenedContainer, PrecreatedPublicKeyCredential, PrivateData, UnlockSuccess, WebauthnPrfEncryptionKeyInfo, WebauthnPrfSaltInfo, WrappedKeyInfo } from "./keystore";
+import { PublicKeyCredentialCreation } from "../types/webauthn";
+import WebauthnInteractionDialogContext from "../context/WebauthnInteractionDialogContext";
+import { useTranslation } from "react-i18next";
 import { MDoc } from "@auth0/mdl";
 
 
@@ -34,14 +37,14 @@ export interface LocalStorageKeystore {
 	close(): Promise<void>,
 
 	initPassword(password: string): Promise<[EncryptedContainer, (userHandleB64u: string) => void]>,
-	initPrf(
-		credential: PublicKeyCredential,
-		prfSalt: Uint8Array,
+	initWebauthn(
+		credentialOrCreateOptions: PrecreatedPublicKeyCredential | CredentialCreationOptions,
 		promptForPrfRetry: () => Promise<boolean | AbortSignal>,
 		user: UserData,
-	): Promise<EncryptedContainer>,
-	addPrf(
-		credential: PublicKeyCredential,
+	): Promise<[PublicKeyCredential & { response: AuthenticatorAttestationResponse }, EncryptedContainer]>,
+	beginAddPrf(createOptions: CredentialCreationOptions): Promise<PrecreatedPublicKeyCredential>,
+	finishAddPrf(
+		credential: PrecreatedPublicKeyCredential,
 		[existingUnwrapKey, wrappedMainKey]: [CryptoKey, WrappedKeyInfo],
 		promptForPrfRetry: () => Promise<boolean | AbortSignal>,
 	): Promise<[EncryptedContainer, CommitCallback]>,
@@ -86,6 +89,9 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 	const [userHandleB64u, setUserHandleB64u, clearUserHandleB64u] = useSessionStorage<string | null>("userHandle", null);
 	const [mainKey, setMainKey, clearMainKey] = useSessionStorage<BufferSource | null>("mainKey", null);
 	const clearSessionStorage = useClearStorages(clearUserHandleB64u, clearMainKey);
+
+	const { t } = useTranslation();
+	const webauthnInteractionCtx = useContext(WebauthnInteractionDialogContext);
 
 	const idb = useIndexedDb("wallet-frontend", 2, useCallback((db, prevVersion, newVersion) => {
 		if (prevVersion < 1) {
@@ -215,8 +221,9 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 		mainKey: CryptoKey,
 		keyInfo: AsymmetricEncryptedContainerKeys,
 		user: UserData,
+		credential: PublicKeyCredentialCreation | null,
 	): Promise<EncryptedContainer> => {
-		const unlocked = await keystore.init(mainKey, keyInfo);
+		const unlocked = await keystore.init(mainKey, keyInfo, credential);
 		await finishUnlock(unlocked, user);
 		const { privateData } = unlocked;
 		return privateData;
@@ -228,26 +235,34 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 
 		initPassword: async (password: string): Promise<[EncryptedContainer, (userHandleB64u: string) => void]> => {
 			const { mainKey, keyInfo } = await keystore.initPassword(password);
-			return [await init(mainKey, keyInfo, null), setUserHandleB64u];
+			return [await init(mainKey, keyInfo, null, null), setUserHandleB64u];
 		},
 
-		initPrf: async (
-			credential: PublicKeyCredential,
-			prfSalt: Uint8Array,
+		initWebauthn: async (
+			credentialOrCreateOptions: PrecreatedPublicKeyCredential | CredentialCreationOptions,
 			promptForPrfRetry: () => Promise<boolean | AbortSignal>,
 			user: UserData,
-		): Promise<EncryptedContainer> => {
-			const { mainKey, keyInfo } = await keystore.initPrf(credential, prfSalt, promptForPrfRetry);
-			const result = await init(mainKey, keyInfo, user);
-			return result;
+		): Promise<[PublicKeyCredentialCreation, EncryptedContainer]> => {
+			const { credential, mainKey, keyInfo } = await keystore.initWebauthn(credentialOrCreateOptions, promptForPrfRetry);
+			const result = await init(mainKey, keyInfo, user, credential);
+			return [credential, result];
 		},
 
-		addPrf: async (
-			credential: PublicKeyCredential,
+		beginAddPrf: async (createOptions: CredentialCreationOptions): Promise<PrecreatedPublicKeyCredential> => {
+			return await keystore.beginAddPrf(createOptions);
+		},
+
+		finishAddPrf: async (
+			credential: PrecreatedPublicKeyCredential,
 			[existingUnwrapKey, wrappedMainKey]: [CryptoKey, WrappedKeyInfo],
 			promptForPrfRetry: () => Promise<boolean | AbortSignal>,
 		): Promise<[EncryptedContainer, CommitCallback]> => {
-			const newPrivateData = await keystore.addPrf(privateData, credential, [existingUnwrapKey, wrappedMainKey], promptForPrfRetry);
+			const newPrivateData = await keystore.finishAddPrf(
+				privateData,
+				credential,
+				[existingUnwrapKey, wrappedMainKey],
+				promptForPrfRetry,
+			);
 			return [
 				newPrivateData,
 				async () => {
@@ -368,9 +383,65 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 			return (userHandleB64u);
 		},
 
-		signJwtPresentation: async (nonce: string, audience: string, verifiableCredentials: any[]): Promise<{ vpjwt: string }> => (
-			await keystore.signJwtPresentation(await openPrivateData(), nonce, audience, verifiableCredentials)
-		),
+		signJwtPresentation: async (nonce: string, audience: string, verifiableCredentials: any[]): Promise<{ vpjwt: string }> => {
+			const moveUiStateMachine = webauthnInteractionCtx.setup(
+				t("Sign credential presentation"),
+				state => {
+					switch (state.id) {
+						case 'intro':
+							return {
+								bodyText: t('To proceed, please authenticate with your passkey.'),
+								buttons: {
+									continue: 'intro:ok',
+								},
+							};
+
+						case 'webauthn-begin':
+							return {
+								bodyText: t("Please interact with your authenticator..."),
+							};
+
+						case 'err':
+							return {
+								bodyText: t("An error occurred!"),
+								buttons: {
+									retry: true,
+								},
+							};
+
+						case 'err:ext:sign:signature-not-found':
+							return {
+								bodyText: t("An error occurred: Signature not found."),
+								buttons: {
+									retry: true,
+								},
+							};
+
+						case 'success':
+							return {
+								bodyText: t("Success! Please wait..."),
+							};
+
+						default:
+							throw new Error('Unknown WebAuthn interaction state:', { cause: state });
+					}
+				},
+			);
+			return await keystore.signJwtPresentation(
+				await openPrivateData(),
+				nonce,
+				audience,
+				verifiableCredentials,
+				async event => {
+					if (event.id === "success") {
+						moveUiStateMachine(event);
+						return { id: "success:ok" };
+					} else {
+						return moveUiStateMachine(event);
+					}
+				},
+			);
+		},
 
 		generateOpenid4vciProofs: async (requests: { nonce: string, audience: string, issuer: string }[]): Promise<[
 			{ proof_jwts: string[] },
@@ -378,16 +449,71 @@ export function useLocalStorageKeystore(): LocalStorageKeystore {
 			CommitCallback,
 		]> => (
 			await editPrivateData(async (originalContainer) => {
-				const { nonce, audience, issuer } = requests[0]; // the first row is enough since the nonce remains the same
-				const [{ proof_jwts }, newContainer] = await keystore.generateOpenid4vciProofs(
-					originalContainer,
-					config.DID_KEY_VERSION,
-					nonce,
-					audience,
-					issuer,
-					requests.length
-				);
-				return [{ proof_jwts }, newContainer];
+				let proof_jwts = [];
+				let container = originalContainer;
+
+				for (const { nonce, audience, issuer } of requests) {
+					const moveUiStateMachine = webauthnInteractionCtx.setup(
+						t("Sign credential issuance ({{currentNumber}} of {{totalNumber}})", { currentNumber: proof_jwts.length + 1, totalNumber: requests.length }),
+						state => {
+							switch (state.id) {
+								case 'intro':
+									return {
+										bodyText: t('To proceed, please authenticate with your passkey.'),
+										buttons: {
+											continue: 'intro:ok',
+										},
+									};
+
+								case 'webauthn-begin':
+									return {
+										bodyText: t("Please interact with your authenticator..."),
+									};
+
+								case 'err':
+									return {
+										bodyText: t("An error occurred!"),
+										buttons: {
+											retry: true,
+										},
+									};
+
+								case 'err:ext:sign:signature-not-found':
+									return {
+										bodyText: t("An error occurred: Signature not found."),
+										buttons: {
+											retry: true,
+										},
+									};
+
+								case 'success':
+									return {
+										bodyText: t("Your credential has been issued successfully."),
+										buttons: {
+											continue: 'success:ok',
+										},
+									};
+
+								default:
+									throw new Error('Unknown WebAuthn interaction state:', { cause: state });
+							}
+						},
+					);
+
+					const [{ proof_jwts: [proof_jwt] }, newContainer] = await keystore.generateOpenid4vciProofs(
+						container,
+						config.DID_KEY_VERSION,
+						nonce,
+						audience,
+						issuer,
+						1,
+						moveUiStateMachine,
+					);
+					proof_jwts.push(proof_jwt);
+					container = newContainer;
+				}
+
+				return [{ proof_jwts }, container];
 			})
 		),
 
