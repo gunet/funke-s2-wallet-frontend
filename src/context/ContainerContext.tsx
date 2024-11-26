@@ -26,7 +26,8 @@ import StatusContext from "./StatusContext";
 import { getSdJwtVcMetadata } from "../lib/utils/getSdJwtVcMetadata";
 import { CredentialBatchHelper } from "../lib/services/CredentialBatchHelper";
 import { MDoc } from "@auth0/mdl";
-import { deviceResponseParser, mdocPIDParser } from "../lib/utils/mdocPIDParser";
+import {deviceResponseParser, mdocPIDParser } from "../lib/utils/mdocPIDParser";
+import {PidParser } from "../lib/utils/PidParser";
 
 export type ContainerContextValue = {
 	httpProxy: IHttpProxy,
@@ -102,6 +103,7 @@ export const ContainerContextProvider = ({ children }) => {
 				)
 				const credentialParserRegistry = cont.resolve<ICredentialParserRegistry>('CredentialParserRegistry');
 
+				credentialParserRegistry.addParser(PidParser);
 				credentialParserRegistry.addParser(deviceResponseParser);
 				credentialParserRegistry.addParser(mdocPIDParser);
 				credentialParserRegistry.addParser({
