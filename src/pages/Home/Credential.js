@@ -177,11 +177,11 @@ const Credential = () => {
 				{shareWithQr && (<Button variant='primary' additionalClassName='w-full my-2' onClick={generateQR}>{<span className='px-1'><BsQrCode/></span>}Share using QR Code</Button>)}
 					<PopupLayout isOpen={showMdocQR}>
 					<div className="flex items-start justify-between mb-2">
-						<h2 className="text-lg font-bold text-blue-500">
+						<h2 className="text-lg font-bold text-primary">
 							Share using QRCode
 						</h2>
 						</div>
-						<hr className="mb-2 border-t border-blue-500/80" />
+						<hr className="mb-2 border-t border-primary/80" />
 						<span>
 								{mdocQRStatus === -1 && 
 									<span>
@@ -189,14 +189,14 @@ const Credential = () => {
 									</span>}
 								{mdocQRStatus === 0 && <span className='flex items-center justify-center'><QRCode value={mdocQRContent} /></span>}
 								{mdocQRStatus === 1 && <span>Communicating with verifier...</span>}
-								{mdocQRStatus === 2 && <span className='flex items-center justify-center'><BsCheckCircle color='green' size={100}/></span>}
+								{mdocQRStatus === 2 && <span className='flex items-center justify-center mt-10'><BsCheckCircle color='green' size={100}/></span>}
 						</span>
 						<div className="flex justify-end space-x-2 pt-4">
 								{mdocQRStatus !== 1 && <Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>}
 					</div>
 					</PopupLayout>
 				</div>
-				<div className='px-2 pt-2 w-full'>
+				<div className='px-2 w-full'>
 					<CredentialDeleteButton onDelete={() => { setShowDeletePopup(true); }} />
 				</div>
 				{/* Delete Credential Popup */}
