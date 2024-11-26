@@ -54,7 +54,7 @@ const CredentialLayout = ({ children, title = null }) => {
 	}, [api, credentialId]);
 
 	useEffect(() => {
-		if (!vcEntity) {
+		if (!vcEntity || !container) {
 			return;
 		}
 		container.credentialParserRegistry.parse(vcEntity.credential).then((c) => {

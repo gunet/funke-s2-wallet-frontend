@@ -3,7 +3,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import QRCode from "react-qr-code";
-import { BsQrCode } from "react-icons/bs";
+import { BsQrCode, BsCheckCircle } from "react-icons/bs";
 
 // Contexts
 import SessionContext from '../../context/SessionContext';
@@ -23,6 +23,7 @@ import DeletePopup from '../../components/Popups/DeletePopup';
 import Button from '../../components/Buttons/Button';
 import CredentialLayout from '../../components/Credentials/CredentialLayout';
 import PopupLayout from '../../components/Popups/PopupLayout';
+import Spinner from '../../components/Shared/Spinner';
 
 const Credential = () => {
 	const { credentialId } = useParams();
@@ -37,7 +38,8 @@ const Credential = () => {
 	const screenType = useScreenType();
 	const [activeTab, setActiveTab] = useState(0);
 	const [showMdocQR, setShowMdocQR] = useState(false);
-	const [isCredentialMdoc, setIsCredentialMdoc] = useState(false);
+	const [mdocQRStatus, setMdocQRStatus] = useState(0); // 0 init; 1 loading; 2 finished;
+	const [shareWithQr, setShareWithQr] = useState(false);
 	const [mdocQRContent, setMdocQRContent] = useState("");
 	const navigate = useNavigate();
 	const { t } = useTranslation();
@@ -57,7 +59,7 @@ const Credential = () => {
 	}, [api, credentialId]);
 
 	useEffect(() => {
-		if (!vcEntity) {
+		if (!vcEntity || !container) {
 			return;
 		}
 		container.credentialParserRegistry.parse(vcEntity.credential).then((c) => {
@@ -97,24 +99,41 @@ const Credential = () => {
 	];
 
 	const generateQR = async () => {
-		setMdocQRContent(await container.mdocAppCommunication.generateEngagementQR());
+		setMdocQRStatus(0);
+		setMdocQRContent(await container.mdocAppCommunication.generateEngagementQR(vcEntity.credential));
 		setShowMdocQR(true);
+		const client = await container.mdocAppCommunication.startClient();
+		if (!client) {
+			setMdocQRStatus(-1);
+		} else {
+			setMdocQRStatus(1);
+			await container.mdocAppCommunication.communicationSubphase();
+			setMdocQRStatus(2);
+		}
 	};
 
 	useEffect(() => {
-		async function isItMdoc(credential) {
+		console.log("Triggered transaction thing: ", container.mdocAppCommunication.transactionPending)
+	}, [container.mdocAppCommunication])
+
+	useEffect(() => {
+		async function canWeShareQR(credential) {
+			if (!window.nativeWrapper) {
+				setShareWithQr(false);
+				return;
+			}
 			const mdoc = await container.credentialParserRegistry.parse(credential);
 			if (mdoc?.parsedBy === 'mdocPIDParser') {
-				setIsCredentialMdoc(true);
+				setShareWithQr(true);
 			} else {
-				setIsCredentialMdoc(false);
+				setShareWithQr(false);
 			}
 		}
 
-		if (vcEntity?.credential) {
-			isItMdoc(vcEntity?.credential);
+		if (vcEntity?.credential && container) {
+			canWeShareQR(vcEntity?.credential);
 		}
-	}, [vcEntity]);
+	}, [vcEntity, container]);
 
 
 	return (
@@ -155,13 +174,31 @@ const Credential = () => {
 					)}
 				</div>
 				<div className='px-2 w-full'>
+				{shareWithQr && (<Button variant='primary' additionalClassName='w-full my-2' onClick={generateQR}>{<span className='px-1'><BsQrCode/></span>}Share using QR Code</Button>)}
+					<PopupLayout isOpen={showMdocQR}>
+					<div className="flex items-start justify-between mb-2">
+						<h2 className="text-lg font-bold text-primary">
+							Share using QRCode
+						</h2>
+						</div>
+						<hr className="mb-2 border-t border-primary/80" />
+						<span>
+								{mdocQRStatus === -1 && 
+									<span>
+										We couldn't access nearby device features. Please enable nearby devices permissions in your settings and restart the app to "Share with QRCode".
+									</span>}
+								{mdocQRStatus === 0 && <span className='flex items-center justify-center'><QRCode value={mdocQRContent} /></span>}
+								{mdocQRStatus === 1 && <span>Communicating with verifier...</span>}
+								{mdocQRStatus === 2 && <span className='flex items-center justify-center mt-10'><BsCheckCircle color='green' size={100}/></span>}
+						</span>
+						<div className="flex justify-end space-x-2 pt-4">
+								{mdocQRStatus !== 1 && <Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>}
+					</div>
+					</PopupLayout>
+				</div>
+				<div className='px-2 w-full'>
 					<CredentialDeleteButton onDelete={() => { setShowDeletePopup(true); }} />
 				</div>
-				{isCredentialMdoc && (<Button variant='primary' additionalClassName='' onClick={generateQR}>{<BsQrCode/>} Device Engagement QR</Button>)}
-				<PopupLayout isOpen={showMdocQR}>
-					<QRCode value={mdocQRContent} />
-					<Button variant='primary' onClick={() => setShowMdocQR(false)}>Close</Button>
-				</PopupLayout>
 				{/* Delete Credential Popup */}
 				{showDeletePopup && vcEntity && (
 					<DeletePopup

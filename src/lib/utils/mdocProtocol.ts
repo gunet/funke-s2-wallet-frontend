@@ -30,9 +30,14 @@ export async function createSessionKey(rawPublic: ArrayBuffer, ephemeralKey: Cry
 	return sessionKey;
 }
 
-export async function encryptMessage(sessionKey, plaintext) {
-	const enc = new TextEncoder();
-	const iv = crypto.getRandomValues(new Uint8Array(12));
+export async function encryptMessage(sessionKey, plaintext, iv=null) {
+	// const enc = new TextEncoder();
+	if (!iv) {
+		iv = crypto.getRandomValues(new Uint8Array(12));
+	} else {
+		console.log('using iv:');
+		console.log(iv);
+	}
 
 	const ciphertext = await crypto.subtle.encrypt(
 		{
@@ -40,13 +45,14 @@ export async function encryptMessage(sessionKey, plaintext) {
 			iv: iv
 		},
 		sessionKey,
-		enc.encode(plaintext)
+		// enc.encode(plaintext)
+		plaintext
 	);
 
 	return { iv, ciphertext };
 }
 
-export async function decryptMessage(sessionKey, iv, ciphertext) {
+export async function decryptMessage(sessionKey, iv, ciphertext, uint8 = false) {
 	const dec = new TextDecoder();
 
 	const plaintext = await crypto.subtle.decrypt(
@@ -57,8 +63,11 @@ export async function decryptMessage(sessionKey, iv, ciphertext) {
 		sessionKey,
 		ciphertext
 	);
-
-	return dec.decode(plaintext);
+	if (uint8) {
+		return new Uint8Array(plaintext);
+	} else {
+		return dec.decode(plaintext);
+	}
 }
 
 export function hexToUint8Array(hexString) {
@@ -131,10 +140,10 @@ export async function getKey(keyMaterial, salt, info) {
 	);
 }
 
-export function getSessionTranscriptBytes(deviceEngagementBytes, eReaderKey) {
+export function getSessionTranscriptBytes(deviceEngagementBytes, eReaderKeyBytes) {
 	return cborEncode(DataItem.fromData([
 		deviceEngagementBytes, // DeviceEngagementBytes
-		DataItem.fromData(eReaderKey), // EReaderKeyBytes
+		eReaderKeyBytes, // EReaderKeyBytes
 		null,
 	]))
 }

@@ -1,5 +1,11 @@
+import { MDoc } from "@auth0/mdl";
+
 export interface IMdocAppCommunication {
 	ephemeralKey: CryptoKeyPair;
-	generateEngagementQR() :Promise<string>
-	communicationSubphase(uuid: string,  deviceEngagementBytes: Buffer) :Promise<void>
+	uuid: string;
+	deviceEngagementBytes: any;
+	credential: any;
+	generateEngagementQR(credential: any) :Promise<string>
+	startClient() :Promise<boolean>
+	communicationSubphase(uuid: string,  deviceEngagementBytes: Buffer, credential: any) :Promise<void>
 }
