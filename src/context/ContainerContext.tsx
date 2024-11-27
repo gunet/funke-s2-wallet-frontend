@@ -306,6 +306,11 @@ export const ContainerContextProvider = ({ children }) => {
 						console.error("Either authorizationServerMetadata or credentialIssuerMetadata could not be loaded");
 						return null;
 					}
+					if (credentialIssuerMetadata.metadata.credential_issuer.includes(process.env.REACT_APP_PID_CREDENTIAL_ISSUER_IDENTIFIER)) {
+						credentialIssuerMetadata.metadata.batch_credential_issuance = {
+							batch_size: 4
+						}
+					}
 					return {
 						clientId: credentialIssuer.clientId,
 						credentialIssuerIdentifier: credentialIssuer.credentialIssuerIdentifier,
