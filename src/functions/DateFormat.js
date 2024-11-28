@@ -10,7 +10,17 @@ export function formatDate(value, format = 'datetime') {
 	} else if (simpleDateRegex.test(value)) {
 		date = new Date(value);
 	} else {
-		return value;
+		// Try to parse other formats, such as 'Wed Dec 11 2024 14:46:19 GMT+0200'
+		try {
+			date = new Date(value);
+			if (isNaN(date)) {
+				// If invalid, return original value
+				return value;
+			}
+		} catch (error) {
+			// Return original value if parsing fails
+			return value;
+		}
 	}
 	const options = format === 'datetime'
 		? { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }
