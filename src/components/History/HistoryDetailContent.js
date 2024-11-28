@@ -6,10 +6,12 @@ import { useTranslation } from 'react-i18next';
 import Slider from '../Shared/Slider';
 import CredentialImage from '../Credentials/CredentialImage';
 import CredentialInfo from '../Credentials/CredentialInfo';
+import useScreenType from '../../hooks/useScreenType';
 
 const HistoryDetailContent = ({ historyItem }) => {
 	const { t } = useTranslation();
 	const [currentSlide, setCurrentSlide] = React.useState(1);
+	const screenType = useScreenType();
 
 	const renderSlideContent = (credential) => (
 		<div
@@ -34,7 +36,7 @@ const HistoryDetailContent = ({ historyItem }) => {
 
 			{/* Render details of the currently selected credential */}
 			{historyItem[currentSlide - 1] && (
-				<div className="pt-5">
+				<div className={`pt-5 overflow-y-auto items-center custom-scrollbar ${screenType !== 'mobile' ? 'max-h-[30vh]' : 'max-h-[25vh]'} `}>
 					<CredentialInfo credential={historyItem[currentSlide - 1]} display='all' />
 				</div>
 			)}
