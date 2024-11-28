@@ -16,6 +16,7 @@ import { CredentialBatchHelper } from "./CredentialBatchHelper";
 import { MDoc, parse } from "@auth0/mdl";
 import { JSONPath } from "jsonpath-plus";
 import { cborDecode, cborEncode } from "../utils/cbor";
+import { toBase64 } from "../../util";
 
 export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 
@@ -434,7 +435,10 @@ export class OpenID4VPRelyingParty implements IOpenID4VPRelyingParty {
 
 		const credentialIdentifiers = originalVCs.map((vc) => vc.credentialIdentifier);
 
-		const storePresentationPromise = this.storeVerifiablePresentation(generatedVPs[0], presentationSubmission.descriptor_map[0].format, credentialIdentifiers, presentationSubmission, client_id);
+		const presentations = "b64:" + toBase64(new TextEncoder().encode(JSON.stringify([
+			...generatedVPs
+		])));
+		const storePresentationPromise = this.storeVerifiablePresentation(presentations, "", credentialIdentifiers, presentationSubmission, client_id);
 		const updateCredentialPromise = filteredVCEntities.map(async (cred) => this.credentialBatchHelper.useCredential(cred))
 
 		const updateRepositoryPromise = this.openID4VPRelyingPartyStateRepository.store(S);
