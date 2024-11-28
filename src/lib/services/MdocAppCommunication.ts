@@ -15,7 +15,9 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 	uuid: string;
 	deviceEngagementBytes: any;
 	credential: any;
-	
+	assumedChunkSize: number;
+	sessionDataEncoded: Buffer;
+
 	async generateEngagementQR(credential :any) {
 		const keyPair = await crypto.subtle.generateKey(
 			{
@@ -47,22 +49,26 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 	async startClient() :Promise<boolean> {
 		/* @ts-ignore */
 		if (window.nativeWrapper) {
+			/* @ts-ignore */
+			await nativeWrapper.bluetoothTerminate(); // Terminate any pending ble connections
 			try {
 				/* @ts-ignore */
 				const client = await window.nativeWrapper.bluetoothCreateClient(this.uuid);
 				return client;
 			} catch(e) {
+				console.log(e);
+				/* @ts-ignore */
+				console.log(await nativeWrapper.bluetoothStatus());
 				console.log("Could not initialize BLE client");
 				return false;
 			}
-		} else {
-			return false;
 		}
+		return false;
 	}
 
-	async communicationSubphase(): Promise<void> {
+	async getMdocRequest(): Promise<string[]> {
 		let aggregatedData = [];
-		let assumedChunkSize = 512;
+		this.assumedChunkSize = 512;
 		/* @ts-ignore */
 		if (window.nativeWrapper) {
 			console.log("Created BLE client");
@@ -71,7 +77,7 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 				while(dataReceived[0] === 1) {
 					/* @ts-ignore */
 					dataReceived = JSON.parse(await window.nativeWrapper.bluetoothReceiveFromServer());
-					// assumedChunkSize = Math.max(assumedChunkSize, dataReceived.length);
+					// this.assumedChunkSize = Math.max(this.assumedChunkSize, dataReceived.length);
 					console.log("Data received");
 					console.log(dataReceived);
 					aggregatedData = [...aggregatedData, ...dataReceived.slice(1)];
@@ -82,7 +88,7 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 				console.log(e);
 			}
 		}
-		console.log('Assumed chunk size: ', assumedChunkSize);
+		console.log('Assumed chunk size: ', this.assumedChunkSize);
 		const sessionMessage = uint8ArraytoHexString(new Uint8Array(aggregatedData));
 		const decoded = cborDecode(hexToUint8Array(sessionMessage));
 		const readerKey = decoded.get('eReaderKey');
@@ -121,15 +127,15 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 		} catch (e) {
 			console.log(e);
 		}
-		console.log(decryptedVerifierData);
+		const fieldKeys : string[] = [];
 		if (decryptedVerifierData) {
 			const mdocRequestDecoded = cborDecode(decryptedVerifierData);
-			console.log(mdocRequestDecoded);
 			const fields :Map<string, boolean>= mdocRequestDecoded.get("docRequests")[0].get("itemsRequest").data.get("nameSpaces").get("eu.europa.ec.eudi.pid.1");
 
 			const fieldsPEX = [];
 			fields.forEach((value, key, map) => {
-				fieldsPEX.push(          {
+				fieldKeys.push(key);
+				fieldsPEX.push({
 					"name": key,
 					"path": [
 						`$['eu.europa.ec.eudi.pid.1']['${key}']`
@@ -137,7 +143,6 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 					"intent_to_retain": value
 				},)
 			})
-			console.log(fieldsPEX);
 			const fullPEX = {
 				"id": "MdocPID",
 				"title": "MDOC PID",
@@ -194,23 +199,28 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 			}
 
 			const sessionDataEncoded = cborEncode(sessionData);
-			let toSendBytes = Array.from(sessionDataEncoded);
-			console.log("To send length: ", toSendBytes.length);
-			while (toSendBytes.length > (assumedChunkSize - 1)){
-				const chunk = [1, ...toSendBytes.slice(0, (assumedChunkSize - 1))]
+			this.sessionDataEncoded = sessionDataEncoded;
+		}
+
+		return fieldKeys;
+	}
+
+	async sendMdocResponse(): Promise<void> {
+		if (this.sessionDataEncoded) {
+			let toSendBytes = Array.from(this.sessionDataEncoded);
+			while (toSendBytes.length > (this.assumedChunkSize - 1)){
+				const chunk = [1, ...toSendBytes.slice(0, (this.assumedChunkSize - 1))]
 				console.log(chunk);
 				/* @ts-ignore */
 				const send = await nativeWrapper.bluetoothSendToServer(JSON.stringify(chunk));
 				console.log(send);
-				toSendBytes = toSendBytes.slice((assumedChunkSize - 1));
+				toSendBytes = toSendBytes.slice((this.assumedChunkSize - 1));
 			}
 			/* @ts-ignore */
 			const send = await nativeWrapper.bluetoothSendToServer(JSON.stringify([0, ...toSendBytes]));
-			console.log(send);
 		}
 		/* @ts-ignore */
 		await nativeWrapper.bluetoothTerminate();
-
-		return;
+		return ;
 	}
 }

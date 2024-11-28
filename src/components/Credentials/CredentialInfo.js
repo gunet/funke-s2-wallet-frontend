@@ -52,7 +52,7 @@ const renderRow = (fieldName, label, fieldValue, screenType) => {
 	}
 };
 
-const CredentialInfo = ({ credential, mainClassName = "text-sm lg:text-base w-full", display = 'mandatory' }) => {
+const CredentialInfo = ({ credential, mainClassName = "text-sm lg:text-base w-full", display = 'mandatory', filter = null }) => {
 
 	const [parsedCredential, setParsedCredential] = useState(null);
 	const container = useContext(ContainerContext);
@@ -64,11 +64,21 @@ const CredentialInfo = ({ credential, mainClassName = "text-sm lg:text-base w-fu
 				if ('error' in c) {
 					return;
 				}
-				setParsedCredential(c.beautifiedForm);
+				if (filter && filter.length > 0) {
+					const filteredCred = {};
+					for (const key in c.beautifiedForm) {
+						if (filter.includes(key)) {
+							filteredCred[key] = c.beautifiedForm[key];
+						}
+					}
+					setParsedCredential(filteredCred);
+				} else {
+					setParsedCredential(c.beautifiedForm);
+				}
 			});
 		}
 
-	}, [credential, container]);
+	}, [credential, container, filter]);
 
 	console.log(parsedCredential);
 	return (
