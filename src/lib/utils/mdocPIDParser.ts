@@ -4,6 +4,7 @@ import { PresentationDefinitionType } from "../types/presentationDefinition.type
 import * as cbor from 'cbor-x';
 import * as jose from 'jose';
 import defaulCredentialImage from "../../assets/images/cred.png";
+import renderCustomSvgTemplate from "../../components/Credentials/RenderCustomSvgTemplate";
 
 
 export const deviceResponseParser: ICredentialParser = {
@@ -20,10 +21,11 @@ export const deviceResponseParser: ICredentialParser = {
 			const namespace = parsedDocument.issuerSignedNameSpaces[0];
 
 			const attrValues = parsedDocument.getIssuerNameSpace(namespace);
+			const svgCustomContent = await renderCustomSvgTemplate({ beautifiedForm: attrValues, name: namespace, description: "", backgroundColor: "#e1dcd2", textColor: "#555d4e" });
 			return {
 				credentialFriendlyName: parsedDocument.issuerSignedNameSpaces[0],
 				credentialImage: {
-					credentialImageURL: defaulCredentialImage,
+					credentialImageURL: svgCustomContent || defaulCredentialImage,
 				},
 				beautifiedForm: attrValues,
 			}
@@ -56,11 +58,12 @@ export const mdocPIDParser: ICredentialParser = {
 			const [parsedDocument] = mdoc.documents;
 			const namespace = parsedDocument.issuerSignedNameSpaces[0]
 			const attrValues = parsedDocument.getIssuerNameSpace(namespace);
+			const svgCustomContent = await renderCustomSvgTemplate({ beautifiedForm: attrValues, name: namespace, description: "", backgroundColor: "#e1dcd2", textColor: "#555d4e" });
 
 			return {
 				credentialFriendlyName: namespace,
 				credentialImage: {
-					credentialImageURL: defaulCredentialImage,
+					credentialImageURL: svgCustomContent || defaulCredentialImage,
 				},
 				beautifiedForm: attrValues,
 			}
