@@ -252,7 +252,7 @@ function SelectCredentialsPopup({ isOpen, setIsOpen, setSelectionMap, conformant
 				</div>
 				{vcEntities[currentSlide - 1] && (
 					<div className={`flex flex-wrap justify-center flex flex-row justify-center items-center mb-2 ${screenType === 'desktop' && 'overflow-y-auto items-center custom-scrollbar max-h-[20vh]'} ${screenType === 'tablet' && 'px-24'}`}>
-						<CredentialInfo credential={vcEntities[currentSlide - 1].credential} mainClassName={"text-xs w-full"} />
+						<CredentialInfo credential={vcEntities[currentSlide - 1].credential} mainClassName={"text-xs w-full"} display='all' />
 					</div>
 				)}
 				<div className={`flex justify-between pt-4 z-10 ${screenType !== 'desktop' && 'fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 flex px-6 pb-6 flex shadow-2xl rounded-t-lg w-auto'}`}>
