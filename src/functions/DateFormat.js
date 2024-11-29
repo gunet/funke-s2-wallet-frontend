@@ -5,7 +5,10 @@ export function formatDate(value, format = 'datetime') {
 	const simpleDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 	let date;
-	if (iso8601Regex.test(value)) {
+	if (typeof value == 'number') {
+		return new Date(value * 1000).toLocaleDateString('en-GB');
+	}
+	else if (iso8601Regex.test(value)) {
 		date = new Date(value);
 	} else if (simpleDateRegex.test(value)) {
 		date = new Date(value);
