@@ -36,7 +36,7 @@ const HistoryDetailContent = ({ historyItem }) => {
 
 			{/* Render details of the currently selected credential */}
 			{historyItem[currentSlide - 1] && (
-				<div className={`pt-5 overflow-y-auto items-center custom-scrollbar ${screenType !== 'mobile' ? 'max-h-[30vh]' : 'max-h-[25vh]'} `}>
+				<div className={`pt-5 ${screenType !== 'mobile' ? 'overflow-y-auto items-center custom-scrollbar max-h-[30vh]' : ''} `}>
 					<CredentialInfo credential={historyItem[currentSlide - 1]} display='all' />
 				</div>
 			)}
