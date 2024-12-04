@@ -14,6 +14,7 @@ import { DataItem, DeviceResponse, MDoc } from "@auth0/mdl";
 import * as cbor from 'cbor-x';
 import { COSEKeyToJWK } from "cose-kit";
 import { SupportedAlgs } from "@auth0/mdl/lib/mdoc/model/types";
+import { cborDecode } from "../lib/utils/cbor";
 
 
 const keyDidResolver = KeyDidResolver.getResolver();
@@ -1186,7 +1187,7 @@ export async function generateOpenid4vciProofs(
 
 export async function generateDeviceResponse([privateData, mainKey]: [PrivateData, CryptoKey], mdocCredential: MDoc, presentationDefinition: any, mdocGeneratedNonce: string, verifierGeneratedNonce: string, clientId: string, responseUri: string): Promise<{ deviceResponseMDoc: MDoc }> {
 	// extract the COSE device public key from mdoc
-	const p: DataItem = cbor.decode(mdocCredential.documents[0].issuerSigned.issuerAuth.payload);
+	const p: DataItem = cborDecode(mdocCredential.documents[0].issuerSigned.issuerAuth.payload);
 	const deviceKeyInfo = p.data.get('deviceKeyInfo');
 	const deviceKey = deviceKeyInfo.get('deviceKey');
 
@@ -1214,7 +1215,7 @@ export async function generateDeviceResponse([privateData, mainKey]: [PrivateDat
 
 export async function generateDeviceResponseWithProximity([privateData, mainKey]: [PrivateData, CryptoKey], mdocCredential: MDoc, presentationDefinition: any, sessionTranscriptBytes: any): Promise<{ deviceResponseMDoc: MDoc }> {
 	// extract the COSE device public key from mdoc
-	const p: DataItem = cbor.decode(mdocCredential.documents[0].issuerSigned.issuerAuth.payload);
+	const p: DataItem = cborDecode(mdocCredential.documents[0].issuerSigned.issuerAuth.payload);
 	const deviceKeyInfo = p.data.get('deviceKeyInfo');
 	const deviceKey = deviceKeyInfo.get('deviceKey');
 

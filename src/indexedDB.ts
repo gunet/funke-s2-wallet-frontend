@@ -55,6 +55,8 @@ function getMappedStoreName(storeName: string): string {
 export async function initializeDataSource(): Promise<void> {
 	try {
 		await stores.users.ready();
+		console.log("initializeDataSource: users table is ready");
+
 		await stores.vc.ready();
 		await stores.vp.ready();
 		await stores.externalEntities.ready();
@@ -68,7 +70,7 @@ export async function initializeDataSource(): Promise<void> {
 }
 
 async function migrateDataSource(): Promise<void> {
-	await migration1();
+	// await migration1();
 }
 
 /** Re-key the local databases from numeric user ID to uuid */

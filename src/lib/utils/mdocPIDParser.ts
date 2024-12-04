@@ -1,10 +1,10 @@
 import { DeviceSignedDocument, parse } from "@auth0/mdl";
 import { ICredentialParser } from "../interfaces/ICredentialParser";
 import { PresentationDefinitionType } from "../types/presentationDefinition.type";
-import * as cbor from 'cbor-x';
 import * as jose from 'jose';
 import defaulCredentialImage from "../../assets/images/cred.png";
 import renderCustomSvgTemplate from "../../components/Credentials/RenderCustomSvgTemplate";
+import { cborDecode, cborEncode } from "./cbor";
 
 
 export const deviceResponseParser: ICredentialParser = {
@@ -44,7 +44,7 @@ export const mdocPIDParser: ICredentialParser = {
 
 		try {
 			const credentialBytes = jose.base64url.decode(rawCredential);
-			const issuerSigned = cbor.decode(credentialBytes);
+			const issuerSigned = cborDecode(credentialBytes);
 			const m = {
 				version: '1.0',
 				documents: [new Map([
@@ -53,7 +53,7 @@ export const mdocPIDParser: ICredentialParser = {
 				])],
 				status: 0
 			};
-			const encoded = cbor.encode(m);
+			const encoded = cborEncode(m);
 			const mdoc = parse(encoded);
 			const [parsedDocument] = mdoc.documents;
 			const namespace = parsedDocument.issuerSignedNameSpaces[0]
