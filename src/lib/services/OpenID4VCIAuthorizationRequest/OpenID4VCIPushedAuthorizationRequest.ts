@@ -20,7 +20,7 @@ export class OpenID4VCIPushedAuthorizationRequest implements IOpenID4VCIAuthoriz
 		clientId: string,
 		authorizationServerMetadata: OpenidAuthorizationServerMetadata,
 		credentialIssuerMetadata: OpenidCredentialIssuerMetadata,
-	}): Promise<{ authorizationRequestURL: string } | { authorization_code: string; state: string; }> {
+	}): Promise<{ authorizationRequestURL: string; request_uri: string; client_id: string; } | { authorization_code: string; state: string; }> {
 		const { code_challenge, code_verifier } = await pkce();
 
 		const formData = new URLSearchParams();
@@ -64,6 +64,6 @@ export class OpenID4VCIPushedAuthorizationRequest implements IOpenID4VCIAuthoriz
 		const authorizationRequestURL = `${config.authorizationServerMetadata.authorization_endpoint}?request_uri=${request_uri}&client_id=${config.clientId}`
 
 		await this.openID4VCIClientStateRepository.create(new OpenID4VCIClientState(userHandleB64u, config.credentialIssuerIdentifier, state, code_verifier, credentialConfigurationId))
-		return { authorizationRequestURL };
+		return { authorizationRequestURL, request_uri, client_id: config.clientId };
 	}
 }

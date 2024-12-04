@@ -22,7 +22,7 @@ export class OpenID4VCIAuthorizationRequestForFirstPartyApplications implements 
 		clientId: string,
 		authorizationServerMetadata: OpenidAuthorizationServerMetadata,
 		credentialIssuerMetadata: OpenidCredentialIssuerMetadata,
-	}): Promise<{ authorizationRequestURL: string } | { authorization_code: string; state: string; }> {
+	}): Promise<{ authorizationRequestURL: string; request_uri: string; client_id: string; } | { authorization_code: string; state: string; }> {
 		const { code_challenge, code_verifier } = await pkce();
 
 		const formData = new URLSearchParams();
