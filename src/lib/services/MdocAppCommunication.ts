@@ -4,11 +4,16 @@ import { cborDecode, cborEncode } from "../utils/cbor";
 import { v4 as uuidv4 } from 'uuid';
 import { encryptMessage, decryptMessage, hexToUint8Array, uint8ArrayToBase64Url, deriveSharedSecret, getKey, uint8ArraytoHexString, getSessionTranscriptBytes, getDeviceEngagement } from "../utils/mdocProtocol";
 import { base64url } from "jose";
+import { CredentialBatchHelper } from "./CredentialBatchHelper";
+import { StorableCredential } from "../types/StorableCredential";
 
 
 export class MdocAppCommunication implements IMdocAppCommunication {
 	constructor(
+		private credentialBatchHelper: CredentialBatchHelper,
+		private getAllStoredVerifiableCredentials: () => Promise<{ verifiableCredentials: StorableCredential[] }>,
 		private generateDeviceResponseFn: (mdocCredential: MDoc, presentationDefinition: any, sessionTranscripBytes: any) => Promise<{ deviceResponseMDoc: MDoc }>,
+		private storeVerifiablePresentation: (presentation: string, format: string, identifiersOfIncludedCredentials: string[], presentationSubmission: any, audience: string) => Promise<void>,
 	) { }
 
 	ephemeralKey: CryptoKeyPair;
@@ -182,6 +187,15 @@ export class MdocAppCommunication implements IMdocAppCommunication {
 			const mdoc = parse(encoded);
 
 			const { deviceResponseMDoc } = await this.generateDeviceResponseFn(mdoc, fullPEX, sessionTranscriptBytes);
+
+			const storePresentation = async () => {
+				const encodedDeviceResponse = base64url.encode(deviceResponseMDoc.encode());
+				const creds = await this.getAllStoredVerifiableCredentials();
+				const storableCredential = creds.verifiableCredentials.filter((cred) => cred.credential == this.credential)[0];
+				this.storeVerifiablePresentation(encodedDeviceResponse, "", [storableCredential.credentialIdentifier], {}, "proximity");
+				this.credentialBatchHelper.useCredential(storableCredential);
+			}
+			storePresentation().catch(() => console.log("Failed to store"));
 
 			// encrypt mdoc response
 			const iv = new Uint8Array([

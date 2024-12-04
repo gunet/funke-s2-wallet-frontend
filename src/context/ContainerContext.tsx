@@ -28,8 +28,8 @@ import StatusContext from "./StatusContext";
 import { getSdJwtVcMetadata } from "../lib/utils/getSdJwtVcMetadata";
 import { CredentialBatchHelper } from "../lib/services/CredentialBatchHelper";
 import { MDoc } from "@auth0/mdl";
-import {deviceResponseParser, mdocPIDParser } from "../lib/utils/mdocPIDParser";
-import {PidParser } from "../lib/utils/PidParser";
+import { deviceResponseParser, mdocPIDParser } from "../lib/utils/mdocPIDParser";
+import { PidParser } from "../lib/utils/PidParser";
 
 export type ContainerContextValue = {
 	httpProxy: IHttpProxy,
@@ -91,9 +91,36 @@ export const ContainerContextProvider = ({ children }) => {
 				const userData = userResponse.data;
 
 				cont.register<IHttpProxy>('HttpProxy', HttpProxy);
+
+				cont.register<CredentialBatchHelper>('CredentialBatchHelper', CredentialBatchHelper,
+					async function updateCredential(storableCredential: StorableCredential) {
+						await api.post('/storage/vc/update', {
+							credential: storableCredential
+						});
+					}
+				)
+
 				cont.register<IMdocAppCommunication>('MdocAppCommunication', MdocAppCommunication,
+					cont.resolve<CredentialBatchHelper>('CredentialBatchHelper'),
+
+					async function getAllStoredVerifiableCredentials() {
+						const fetchAllCredentials = await api.get('/storage/vc');
+						return { verifiableCredentials: fetchAllCredentials.data.vc_list };
+					},
+
 					async function generateDeviceResponse(mdocCredential: MDoc, presentationDefinition: any, sessionTranscriptBytes: any) {
 						return keystore.generateDeviceResponseWithProximity(mdocCredential, presentationDefinition, sessionTranscriptBytes);
+					},
+
+					async function storeVerifiablePresentation(presentation: string, format: string, identifiersOfIncludedCredentials: string[], presentationSubmission: any, audience: string) {
+						await api.post('/storage/vp', {
+							presentationIdentifier: generateRandomIdentifier(32),
+							presentation,
+							presentationSubmission,
+							includedVerifiableCredentialIdentifiers: identifiersOfIncludedCredentials,
+							audience,
+							issuanceDate: new Date().toISOString(),
+						});
 					},
 				);
 				cont.register<IOpenID4VPRelyingPartyStateRepository>('OpenID4VPRelyingPartyStateRepository', OpenID4VPRelyingPartyStateRepository);
@@ -103,13 +130,7 @@ export const ContainerContextProvider = ({ children }) => {
 				cont.register<IOpenID4VCIClientStateRepository>('OpenID4VCIClientStateRepository', OpenID4VCIClientStateRepository, userData.settings.openidRefreshTokenMaxAgeInSeconds);
 				cont.register<IOpenID4VCIHelper>('OpenID4VCIHelper', OpenID4VCIHelper, cont.resolve<IHttpProxy>('HttpProxy'));
 
-				cont.register<CredentialBatchHelper>('CredentialBatchHelper', CredentialBatchHelper,
-					async function updateCredential(storableCredential: StorableCredential) {
-						await api.post('/storage/vc/update', {
-							credential: storableCredential
-						});
-					}
-				)
+
 				const credentialParserRegistry = cont.resolve<ICredentialParserRegistry>('CredentialParserRegistry');
 
 				credentialParserRegistry.addParser(PidParser);
