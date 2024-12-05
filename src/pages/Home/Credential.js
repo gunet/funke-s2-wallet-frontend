@@ -213,11 +213,11 @@ const Credential = () => {
 									<p className="text-gray-700 dark:text-white text-sm mt-2 mb-4">
 										A nearby verifier requested the following fields:
 									</p>
-									<CredentialImage
+									{vcEntity && <CredentialImage
 										key={vcEntity.credentialIdentifier}
 										credential={vcEntity.credential}
 										className="w-full object-cover rounded-xl"
-									/>
+									/>}
 									<div className={`flex flex-wrap justify-center flex flex-row justify-center items-center mb-2 pb-[20px] ${screenType === 'desktop' && 'overflow-y-auto items-center custom-scrollbar max-h-[20vh]'} ${screenType === 'tablet' && 'px-24'}`}>
 										{vcEntity && <CredentialInfo mainClassName={"text-xs w-full"} display='all' credential={vcEntity?.credential} filter={shareWithQrFilter}/>}
 									</div>
