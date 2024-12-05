@@ -118,7 +118,23 @@ export class OpenID4VCIClient implements IOpenID4VCIClient {
 		}
 		catch (err) { console.error(err) }
 
-		if (this.config.authorizationServerMetadata.authorization_challenge_endpoint) {
+
+		if (this.config.authorizationServerMetadata.pushed_authorization_request_endpoint) {
+			const res = await this.openID4VCIPushedAuthorizationRequest.generate(
+				credentialConfigurationId,
+				userHandleB64u,
+				issuer_state,
+				{
+					...this.config,
+					redirectUri: redirectUri
+				}
+			);
+			if ('authorizationRequestURL' in res) {
+				const modification = await authorizationRequestModifier(this.config.credentialIssuerIdentifier, res.authorizationRequestURL, res.request_uri, res.client_id);
+				return { url: modification.url };
+			}
+		}
+		else if (this.config.authorizationServerMetadata.authorization_challenge_endpoint) {
 			await this.openID4VCIAuthorizationRequestForFirstPartyApplications.generate(
 				credentialConfigurationId,
 				userHandleB64u,
@@ -135,21 +151,6 @@ export class OpenID4VCIClient implements IOpenID4VCIClient {
 				return this.handleAuthorizationResponse(`openid://?code=${result.authorization_code}&state=${result.state}`, userHandleB64u);
 			});
 			return { }
-		}
-		else if (this.config.authorizationServerMetadata.pushed_authorization_request_endpoint) {
-			const res = await this.openID4VCIPushedAuthorizationRequest.generate(
-				credentialConfigurationId,
-				userHandleB64u,
-				issuer_state,
-				{
-					...this.config,
-					redirectUri: redirectUri
-				}
-			);
-			if ('authorizationRequestURL' in res) {
-				const modification = await authorizationRequestModifier(this.config.credentialIssuerIdentifier, res.authorizationRequestURL, res.request_uri, res.client_id);
-				return { url: modification.url };
-			}
 		}
 	}
 
@@ -427,11 +428,11 @@ export class OpenID4VCIClient implements IOpenID4VCIClient {
 					audience: this.config.credentialIssuerIdentifier
 				})
 			}
-			const generateProofsResult = cachedProofs ? { proof_jwts: cachedProofs } : await this.generateNonceProofs(inputs);
-			proofsArray = generateProofsResult.proof_jwts;
-			if (proofsArray) {
+			const generateProofsResult = cachedProofs ? { proof_jwts: cachedProofs } : await this.generateNonceProofs(inputs).then((res) => {
 				dispatchEvent(new CustomEvent("generatedProof"));
-			}
+				return res;
+			});
+			proofsArray = generateProofsResult.proof_jwts;
 		}
 		catch (err) {
 			console.error(err);
