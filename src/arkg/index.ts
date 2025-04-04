@@ -94,8 +94,8 @@ function arkg<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPub
 				throw new Error("ctx too long", { cause: { ctx, maxLength: CTX_MAX_LEN } });
 			}
 
-			const ctx_kem = concat(new TextEncoder().encode('ARKG-Derive-Key-KEM.'), ctx);
-			const ctx_bl = concat(new TextEncoder().encode('ARKG-Derive-Key-BL.'), ctx);
+			const ctx_kem = concat(new TextEncoder().encode('ARKG-Derive-Key-KEM.'), new Uint8Array([ctx.byteLength]), ctx);
+			const ctx_bl = concat(new TextEncoder().encode('ARKG-Derive-Key-BL.'), new Uint8Array([ctx.byteLength]), ctx);
 			const [tau, c] = await kem.encaps(pubk_kem, ctx_kem);
 			const pk_prime = await bl.blindPublicKey(pubk_bl, tau, ctx_bl);
 			const kh = c;
@@ -111,8 +111,8 @@ function arkg<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPub
 				throw new Error("ctx too long", { cause: { ctx, maxLength: CTX_MAX_LEN } });
 			}
 
-			const ctx_kem = concat(new TextEncoder().encode('ARKG-Derive-Key-KEM.'), ctx);
-			const ctx_bl = concat(new TextEncoder().encode('ARKG-Derive-Key-BL.'), ctx);
+			const ctx_kem = concat(new TextEncoder().encode('ARKG-Derive-Key-KEM.'), new Uint8Array([ctx.byteLength]), ctx);
+			const ctx_bl = concat(new TextEncoder().encode('ARKG-Derive-Key-BL.'), new Uint8Array([ctx.byteLength]), ctx);
 			const tau = await kem.decaps(prik_kem, kh, ctx_kem);
 			const sk_prime = await bl.blindPrivateKey(prik_bl, tau, ctx_bl);
 			return sk_prime;
@@ -582,24 +582,24 @@ export function tests() {
 
 						await runTestVector(
 							"ARKG-P256ADD-ECDH.test vectors",
-							"a23d8fee87b11ebf9e15b306125bfbaec4cfb8f7ceb9fac21d6418e08de2fffa",
-							"8da3fbb332338675bf510f271c3849e5acdc8ff3c70896431b7ff867b687fa61",
-							"26729571445735ce3ef812c34d8fa4b4041de87c951ce50d774877aa126d51ef770adc85f65cb3735d437110a4b1ffe0c9a6b93dc98b395e61a9a30f4eb46dd2358beec7a7b6ee47f7357994c11d96ae71",
-							"75c04746a8234749152131fa778b909bb0bbd0542f25d311643361dce9fdccdc",
+							"dc9aca70ed13bef3b9be15e811abf639ffa4e31f5ae98e45ff143c1a3a87bd90",
+							"6c26ea6f66d30f898939811ac643ba5fd9ad194ce0b9b37ec56feb2722bbb212",
+							"80b0a73df7d44c273e238cec168ddb9a04907c7b7367b10d5323ef40ab97006f8bc958900f0473e911b7efb5b6b5ada709a30c6bc711dba1e18a0c8596f1741beec2a7fae6396451a1348cb9b80f5efe30",
+							"3363715c3986afe8da4b12747963acd5babae2c95a6684aff99af75ec927223b",
 						);
 						await runTestVector(
 							"ARKG-P256ADD-ECDH.test vectors.0",
-							"944d2b4d5cadad3a7eccdb83c8f5755403d94d782c600ec414d2f339c4568bd4",
-							"8118182368db06e9861cf421f26d579efcdd68448d502c0282a4b657a350d988",
-							"08f3f65abe207116aca477b5655e076a04f33b68d15e544c707eeb7e3361af94f80d305adf339dc79e9032a3f695a793decbfc3174c254698358bb82b66f2787809c7d705526332c70f111662adbac7a44",
-							"cc9fd36b23d2fae3f340ce208946ed8a009b761886105199b453dabe353da6fb",
+							"7ae5a6502422d43276c6959b237000a380bb49321c60b88616f525950b15bd2b",
+							"9326afe20f1bf902a2b49715cbecc6c3e127be0d28f72312f4755627cac415b5",
+							"3a50bf73ffd00e837992f1558961768d04ee20a8b5d34d519ae42fdb16e6856bd99b865241ebd24edaba506e3963ee225a48d0d81e58a1b0bacb0c4ff76f7ec0e918b8bd3af2be5bb1ed8ba5ba50bab36a",
+							"b25fb6fd6429288266f8c5d095fb71837c8e09a323749c0c836d330e5cef5855",
 						);
 						await runTestVector(
 							"ARKG-P256ADD-ECDH.test vectors.1",
-							"91f31cdeddfc29c6cf57e03f49cf3c66624ad14026062868339a8aab59be5620",
-							"49b10d5bf91c04255c8007e0fa30d3b815dd50be0c42532cabd5b4010db1c551",
-							"95ecfb538565f77383de363a7884dcfd04e1079a5bc34ea830a96e18db1987d58f56e831894daddeb1e7e8803a1070eedaf80acc138fac948dacb7315d8c1aebe71897e35173cafba15c939f95aae53550",
-							"b8b9da66d862a7aa411e466d1fbe5b134c09f24cfc6b3b017a50bf8ffabf98c6",
+							"124ee0afda2dc2fc0ce46d12824fe7a81b4220293af7cdf1c5ad95ba7175ab94",
+							"27e27a9d6b1b45b21449c7a69edb7da504c86e53939f82c76e200068c105cd5e",
+							"8aeac2902c39f0ae30c26568f2c2f970045d2490c1edfa918136ddc41305ff354fd3f927f9c748509548ca816e28cdef66a0b033438cd25a588924604a3e6530a99292af56b80a9b8980c2b3421c11d9d3",
+							"c362990d56f9441c7eb04ce4bdd9920d91b8e10acd256ddc51180fa56f273388",
 						);
 					});
 				});
