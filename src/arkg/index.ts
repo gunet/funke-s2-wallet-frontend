@@ -4,7 +4,7 @@
 import * as ec from './ec';
 import * as hash_to_curve from './hash_to_curve';
 import { byteArrayEquals, concat, fromBase64Url, fromHex, toBase64, toHex, toU8 } from '../util';
-import { COSE_ALG_ARKG_P256ADD_ECDH } from '../coseConstants';
+import { COSE_ALG_ARKG_P256 as COSE_ALG_ARKG_P256 } from '../coseConstants';
 import { ParsedCOSEKeyArkgPubSeed, ParsedCOSEKeyEc2Public } from '../webauthn';
 
 
@@ -300,14 +300,14 @@ function arkgEcdhKem(
 	@see https://yubico.github.io/arkg-rfc/draft-bradleylundberg-cfrg-arkg.html#name-arkg-p256add-ecdh
 	*/
 export type EcInstanceId = (
-	'ARKG-P256ADD-ECDH'
+	'ARKG-P256'
 );
 
 // Declare as factory functions instead of a global variable registry to prevent callers from overriding internal properties
 const ecInstances: { [id in EcInstanceId]: () => ArkgInstance<ec.Point, bigint, CryptoKey, CryptoKey, ec.Point, bigint> } = {
-	'ARKG-P256ADD-ECDH': () => arkg(
-		arkgBlEcAdd("P256_XMD:SHA-256_SSWU_RO_", new TextEncoder().encode('ARKG-P256ADD-ECDH')),
-		arkgEcdhKem("P-256", "SHA-256", "P256_XMD:SHA-256_SSWU_RO_", new TextEncoder().encode('ARKG-P256ADD-ECDH')),
+	'ARKG-P256': () => arkg(
+		arkgBlEcAdd("P256_XMD:SHA-256_SSWU_RO_", new TextEncoder().encode('ARKG-P256')),
+		arkgEcdhKem("P-256", "SHA-256", "P256_XMD:SHA-256_SSWU_RO_", new TextEncoder().encode('ARKG-P256')),
 	),
 };
 
@@ -322,8 +322,8 @@ export function getEcInstance(id: EcInstanceId): ArkgInstance<ec.Point, bigint, 
 
 export function coseToInstanceId(coseId: COSEAlgorithmIdentifier): EcInstanceId | null {
 	switch (coseId) {
-		case COSE_ALG_ARKG_P256ADD_ECDH:
-			return 'ARKG-P256ADD-ECDH';
+		case COSE_ALG_ARKG_P256:
+			return 'ARKG-P256';
 		default:
 			return null;
 	}
@@ -336,7 +336,7 @@ export function getCoseEcInstance(coseId: COSEAlgorithmIdentifier): ArkgInstance
 
 export async function ecPublicKeyFromCose(pk: ParsedCOSEKeyArkgPubSeed): Promise<ArkgPublicSeed<ec.Point, CryptoKey>> {
 	switch (pk.alg) {
-		case COSE_ALG_ARKG_P256ADD_ECDH:
+		case COSE_ALG_ARKG_P256:
 			const crv = ec.curveSecp256r1();
 			return {
 				pubk_bl: await ec.pointFromCosePublicKey(crv, pk.pkBl as ParsedCOSEKeyEc2Public),
@@ -394,7 +394,7 @@ export function tests() {
 			crv: ec.Curve,
 		}[] = [
 				{
-					instanceName: "ARKG-P256ADD-ECDH",
+					instanceName: "ARKG-P256",
 					namedCurve: "P-256",
 					signAlgorithm: { name: "ECDSA", hash: "SHA-256" },
 					crv: ec.curveSecp256r1(),
@@ -587,7 +587,7 @@ export function tests() {
 						) {
 							it(ctx, async () => {
 								const ctxBytes = new TextEncoder().encode(ctx);
-								const arkgInstance = getEcInstance('ARKG-P256ADD-ECDH');
+								const arkgInstance = getEcInstance('ARKG-P256');
 
 								const [seed_pk, seed_sk] = await arkgInstance.deriveSeed(fromHex(ikmBlHex), fromHex(ikmKemHex));
 								assert.deepEqual(seed_pk.pubk_bl, await ec.pointFromRaw(crv, fromHex(expectPkBlRawHex)));
@@ -610,40 +610,40 @@ export function tests() {
 						}
 
 						await runTestVector(
-							"ARKG-P256ADD-ECDH.test vectors",
+							"ARKG-P256.test vectors",
 							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
 							"404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
-							"04a2fcaffb07af4b764b068d62920acae0c686ed1dbcb23706eb00d9d6eb72f2629b9b7d2f750580f9236f8780f97fd52e897bed34387310b5f1e09afe158b0f75",
-							"040dcdd2b5eadeb52f2a806625e53b570de074a821cd9849e14e96e44c2fa2e858258e36c039e7561016e39895f66dda39dca57dc8a6fc21f82faa2d0514a18aa9",
-							"1cce34353e9d754687fa424541e443f02de665761e81e9e5f0f2ea3affcedd1f",
-							"90c21c9eef3c4e69770d19e9d6e6cb02fd3353902719066a26b08a0f5cc32bb0",
-							"04d41480fe39da63c0de34433176e4032b65fb7720a3a1481db73be20d8a01858839e5cdeead5ac782cb6c010d489eb7009813220d22797456e505af7ebb6fa89c",
-							"59cfb764e0eca750cc7d4a53d74f5c420aebf4e7df7a2c3cfdf57e6d19bc5ef1",
+							"046d3bdf31d0db48988f16d47048fdd24123cd286e42d0512daa9f726b4ecf18df65ed42169c69675f936ff7de5f9bd93adbc8ea73036b16e8d90adbfabdaddba7",
+							"042eff91b46617d0628b979405bb871a7593e4b02ec533712bc1cf80d0b0a1ccf30ec3b161632183ceedf94fbe35a96e60a17c2c79c6379b141eeeba521ea8030f",
+							"d959500a78ccf850ce46c80a8c5043c9a2e33844232b3829df37d05b3069f455",
+							"4253051878eac98187f1394605a3ef5ce1981e664cea41e8094c7d12c606d906",
+							"04824f8f652e8e83ebdb8d8f32af30ede02fda0f115535a535770031bffba00ddee528ec1e9bea469995bb4d69ee32f858fa3727f9b19215812be4f27c50484b89",
+							"84cc1d0e8fdfb4c41b000c8d214e6dc1e7fb2c38f7b1461ba8f9633120b13ee0",
 						);
 						await runTestVector(
-							"ARKG-P256ADD-ECDH.test vectors.0",
+							"ARKG-P256.test vectors.0",
 							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
 							"404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
-							"04a2fcaffb07af4b764b068d62920acae0c686ed1dbcb23706eb00d9d6eb72f2629b9b7d2f750580f9236f8780f97fd52e897bed34387310b5f1e09afe158b0f75",
-							"040dcdd2b5eadeb52f2a806625e53b570de074a821cd9849e14e96e44c2fa2e858258e36c039e7561016e39895f66dda39dca57dc8a6fc21f82faa2d0514a18aa9",
-							"1cce34353e9d754687fa424541e443f02de665761e81e9e5f0f2ea3affcedd1f",
-							"90c21c9eef3c4e69770d19e9d6e6cb02fd3353902719066a26b08a0f5cc32bb0",
-							"046771eed3da75251f0888d87eae7f61e0f0ea2cf186905be63f63fa2e10952c9670fbb392d7004bd1fd419523aa50429f8bfb2c6da2162f2300888910c1d1f408",
-							"b4e524d084900583d71842ecca19b09a8514701ceab877d08db0b598f3a3cb50",
+							"046d3bdf31d0db48988f16d47048fdd24123cd286e42d0512daa9f726b4ecf18df65ed42169c69675f936ff7de5f9bd93adbc8ea73036b16e8d90adbfabdaddba7",
+							"042eff91b46617d0628b979405bb871a7593e4b02ec533712bc1cf80d0b0a1ccf30ec3b161632183ceedf94fbe35a96e60a17c2c79c6379b141eeeba521ea8030f",
+							"d959500a78ccf850ce46c80a8c5043c9a2e33844232b3829df37d05b3069f455",
+							"4253051878eac98187f1394605a3ef5ce1981e664cea41e8094c7d12c606d906",
+							"0424b8633a5e92614e02ec8ffc571b2f802c56d5a2429ae391fb746e2e996fd3994b7823f25a1303b22702a7765cbcf57c2100db8b630a6c36cf4f734d4cd4e2f8",
+							"ac716c3e7217e1b32bc30c29b4d95920f5abdc23763535d55f7d7c544e1d29d8",
 						);
 						await runTestVector(
-							"ARKG-P256ADD-ECDH.test vectors.1",
+							"ARKG-P256.test vectors.1",
 							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
 							"404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
-							"04a2fcaffb07af4b764b068d62920acae0c686ed1dbcb23706eb00d9d6eb72f2629b9b7d2f750580f9236f8780f97fd52e897bed34387310b5f1e09afe158b0f75",
-							"040dcdd2b5eadeb52f2a806625e53b570de074a821cd9849e14e96e44c2fa2e858258e36c039e7561016e39895f66dda39dca57dc8a6fc21f82faa2d0514a18aa9",
-							"1cce34353e9d754687fa424541e443f02de665761e81e9e5f0f2ea3affcedd1f",
-							"90c21c9eef3c4e69770d19e9d6e6cb02fd3353902719066a26b08a0f5cc32bb0",
-							"04f0027a51cfaa8163259477d0f082d8d8645caa7a6fc5aaf9eaf2b6394a5791aec790ffdf4ac4710e59f2a77a2699be665a8db9a272eefe1893b90ebd21b4fc54",
-							"8ce0efc9d0ea0696ee6c29c7a3d64f3306413580b05d1a819c51da6e973e0415",
+							"046d3bdf31d0db48988f16d47048fdd24123cd286e42d0512daa9f726b4ecf18df65ed42169c69675f936ff7de5f9bd93adbc8ea73036b16e8d90adbfabdaddba7",
+							"042eff91b46617d0628b979405bb871a7593e4b02ec533712bc1cf80d0b0a1ccf30ec3b161632183ceedf94fbe35a96e60a17c2c79c6379b141eeeba521ea8030f",
+							"d959500a78ccf850ce46c80a8c5043c9a2e33844232b3829df37d05b3069f455",
+							"4253051878eac98187f1394605a3ef5ce1981e664cea41e8094c7d12c606d906",
+							"0483010a7edac725e7a9f0c215cc98a6a0e3c3b68cf199042af071530a0ba6b2cc4c183ba3e134de5ac214bbf5dabcf33f285b601ab6cd1f6026d56e7cbf12cf92",
+							"3e0cfb8bca3fb84104c1710a72bcdbadf7ed2a9bafc2ffcb79ebbba8e81f86f0",
 						);
 					});
 				});
