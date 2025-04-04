@@ -8,6 +8,8 @@ import { COSE_ALG_ARKG_P256ADD_ECDH } from '../coseConstants';
 import { ParsedCOSEKeyArkgPubSeed, ParsedCOSEKeyEc2Public } from '../webauthn';
 
 
+const CTX_MAX_LEN = 64;
+
 type GenerateKeypairFunction<PublicKey, PrivateKey> = (
 	() => Promise<[PublicKey, PrivateKey]>
 );
@@ -88,6 +90,10 @@ function arkg<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPub
 			{ pubk_bl, pubk_kem }: ArkgPublicSeed<BlPublicKey, KemPublicKey>,
 			ctx: BufferSource,
 		): Promise<[DerivedPublicKey, ArrayBuffer]> => {
+			if (ctx.byteLength > CTX_MAX_LEN) {
+				throw new Error("ctx too long", { cause: { ctx, maxLength: CTX_MAX_LEN } });
+			}
+
 			const ctx_kem = concat(new TextEncoder().encode('ARKG-Derive-Key-KEM.'), ctx);
 			const ctx_bl = concat(new TextEncoder().encode('ARKG-Derive-Key-BL.'), ctx);
 			const [tau, c] = await kem.encaps(pubk_kem, ctx_kem);
@@ -101,6 +107,10 @@ function arkg<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPub
 			kh: BufferSource,
 			ctx: BufferSource,
 		): Promise<DerivedPrivateKey> => {
+			if (ctx.byteLength > CTX_MAX_LEN) {
+				throw new Error("ctx too long", { cause: { ctx, maxLength: CTX_MAX_LEN } });
+			}
+
 			const ctx_kem = concat(new TextEncoder().encode('ARKG-Derive-Key-KEM.'), ctx);
 			const ctx_bl = concat(new TextEncoder().encode('ARKG-Derive-Key-BL.'), ctx);
 			const tau = await kem.decaps(prik_kem, kh, ctx_kem);
@@ -391,6 +401,35 @@ export function tests() {
 			const arkgInstance = getEcInstance(instanceName);
 
 			describe(`instance ${instanceName}`, async () => {
+
+				it("forbids ctx values longer than 64 bytes.", async () => {
+					const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
+					const ctx = crypto.getRandomValues(new Uint8Array(65));
+					const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ctx.slice(0, 64));
+					assert.deepEqual(
+						(await asyncAssertThrows(
+							async () => await arkgInstance.derivePublicKey(pub_seed, ctx),
+							"Expected derivePublicKey to fail with ctx longer than 64 bytes",
+						) as any).cause,
+						{ ctx, maxLength: 64 },
+					);
+
+					const derived_prik = await arkgInstance.derivePrivateKey(pri_seed, kh, ctx.slice(0, 64));
+					assert.deepEqual(
+						(await asyncAssertThrows(
+							async () => await arkgInstance.derivePrivateKey(pri_seed, kh, ctx),
+							"Expected derivePublicKey to fail with ctx longer than 64 bytes",
+						) as any).cause,
+						{ ctx, maxLength: 64 },
+					);
+
+					const publicKey = await ec.publicKeyFromPoint(signAlgorithm.name, namedCurve, derived_pubk);
+					const privateKey = await ec.privateKeyFromScalar(signAlgorithm.name, namedCurve, derived_prik, false, ["sign"]);
+					const sig = await crypto.subtle.sign(signAlgorithm, privateKey, ctx);
+					const valid = await crypto.subtle.verify(signAlgorithm, publicKey, sig, concat(ctx));
+					assert.isTrue(valid, "Invalid signature");
+				});
+
 				it.skip("test vector generation", async () => {
 					function bigIntFromBinary(binary: Uint8Array): bigint {
 						return binary.reduce(
