@@ -450,40 +450,42 @@ export function tests() {
 
 				it.skip("test vector generation", async () => {
 					for (const ctx_suffix of [".test vectors", ".test vectors.0", ".test vectors.1"]) {
-						const ikm_bl = fromHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
-						const ikm_kem = fromHex("202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f");
-						const ikm = fromHex("404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f");
+						for (const ikmHex of ["404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f", "00"]) {
+							const ikm_bl = fromHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+							const ikm_kem = fromHex("202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f");
+							const ikm = fromHex(ikmHex);
 
-						const [pub_seed, pri_seed] = await arkgInstance.deriveSeed(ikm_bl, ikm_kem);
-						const ctx_text = instanceName + ctx_suffix;
-						const ctx = new TextEncoder().encode(ctx_text);
-						const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ikm, ctx);
-						const derived_prik = await arkgInstance.derivePrivateKey(pri_seed, kh, ctx);
-						const publicKey = await ec.publicKeyFromPoint(signAlgorithm.name, namedCurve, derived_pubk);
-						const privateKey = await ec.privateKeyFromScalar(signAlgorithm.name, namedCurve, derived_prik, false, ["sign"]);
-						const sig = await crypto.subtle.sign(signAlgorithm, privateKey, ctx);
+							const [pub_seed, pri_seed] = await arkgInstance.deriveSeed(ikm_bl, ikm_kem);
+							const ctx_text = instanceName + ctx_suffix;
+							const ctx = new TextEncoder().encode(ctx_text);
+							const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ikm, ctx);
+							const derived_prik = await arkgInstance.derivePrivateKey(pri_seed, kh, ctx);
+							const publicKey = await ec.publicKeyFromPoint(signAlgorithm.name, namedCurve, derived_pubk);
+							const privateKey = await ec.privateKeyFromScalar(signAlgorithm.name, namedCurve, derived_prik, false, ["sign"]);
+							const sig = await crypto.subtle.sign(signAlgorithm, privateKey, ctx);
 
-						console.log("Inputs:");
-						console.log(`ctx:           '${ctx_text}'`);
-						console.log(`ikm_bl:        h'${toHex(ikm_bl)}'`);
-						console.log(`ikm_kem:       h'${toHex(ikm_kem)}'`);
-						console.log(`ikm:           h'${toHex(ikm)}'`);
-						console.log();
+							console.log("; Inputs:");
+							console.log(`ctx =          '${ctx_text}'`);
+							console.log(`ikm_bl =       h'${toHex(ikm_bl)}'`);
+							console.log(`ikm_kem =      h'${toHex(ikm_kem)}'`);
+							console.log(`ikm =          h'${toHex(ikm)}'`);
+							console.log();
 
-						console.log("Derive-Seed outputs:");
-						console.log(`pk_bl:         h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", pub_seed.pubk_bl))))}'`);
-						console.log(`pk_kem:        h'${toHex(toU8(await crypto.subtle.exportKey("raw", pub_seed.pubk_kem)))}'`);
-						console.log(`sk_bl:         0x${toHex(bigIntToBinary(pri_seed.prik_bl, 32))}`);
-						console.log(`sk_kem:        0x${toHex(fromBase64Url((await crypto.subtle.exportKey("jwk", pri_seed.prik_kem)).d))}`);
-						console.log();
+							console.log("; Derive-Seed outputs:");
+							console.log(`pk_bl =        h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", pub_seed.pubk_bl))))}'`);
+							console.log(`pk_kem =       h'${toHex(toU8(await crypto.subtle.exportKey("raw", pub_seed.pubk_kem)))}'`);
+							console.log(`sk_bl =        0x${toHex(bigIntToBinary(pri_seed.prik_bl, 32))}`);
+							console.log(`sk_kem =       0x${toHex(fromBase64Url((await crypto.subtle.exportKey("jwk", pri_seed.prik_kem)).d))}`);
+							console.log();
 
-						console.log("Derive-Public-Key outputs:");
-						console.log(`derived_pubk:  h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", derived_pubk))))}'`);
-						console.log(`kh:            (implementation defined)`);
-						console.log();
+							console.log("; Derive-Public-Key outputs:");
+							console.log(`derived_pubk = h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", derived_pubk))))}'`);
+							console.log(`;kh =          (implementation defined)`);
+							console.log();
 
-						console.log("Derive-Private-Key outputs:");
-						console.log(`derived_prik:  0x${toHex(bigIntToBinary(derived_prik, 32))}'`);
+							console.log("; Derive-Private-Key outputs:");
+							console.log(`derived_prik = 0x${toHex(bigIntToBinary(derived_prik, 32))}'`);
+						}
 					}
 
 					assert.isTrue(false, "Forced failure");
@@ -585,7 +587,7 @@ export function tests() {
 							expectDerivedPkRawHex: string,
 							expectDerivedSkHex: string,
 						) {
-							it(ctx, async () => {
+							it(`${ctx}, ${ikmHex.substring(0, 8)}`, async () => {
 								const ctxBytes = new TextEncoder().encode(ctx);
 								const arkgInstance = getEcInstance('ARKG-P256');
 
@@ -622,6 +624,18 @@ export function tests() {
 							"84cc1d0e8fdfb4c41b000c8d214e6dc1e7fb2c38f7b1461ba8f9633120b13ee0",
 						);
 						await runTestVector(
+							"ARKG-P256.test vectors",
+							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+							"00",
+							"046d3bdf31d0db48988f16d47048fdd24123cd286e42d0512daa9f726b4ecf18df65ed42169c69675f936ff7de5f9bd93adbc8ea73036b16e8d90adbfabdaddba7",
+							"042eff91b46617d0628b979405bb871a7593e4b02ec533712bc1cf80d0b0a1ccf30ec3b161632183ceedf94fbe35a96e60a17c2c79c6379b141eeeba521ea8030f",
+							"d959500a78ccf850ce46c80a8c5043c9a2e33844232b3829df37d05b3069f455",
+							"4253051878eac98187f1394605a3ef5ce1981e664cea41e8094c7d12c606d906",
+							"04de0b40be304d6278e12c8f00a21f209b9d32aa3b175fc827d723d88185dd60b4b28419d7fcf8afb1c37cea9ecc872292f4f00fed3ba7068e47f8a5a1c6483bd4",
+							"1a34adccdc22703a386f586ec7d7603a2ddc99d854e2ec5121b91f36b82f2844",
+						);
+						await runTestVector(
 							"ARKG-P256.test vectors.0",
 							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
@@ -634,6 +648,18 @@ export function tests() {
 							"ac716c3e7217e1b32bc30c29b4d95920f5abdc23763535d55f7d7c544e1d29d8",
 						);
 						await runTestVector(
+							"ARKG-P256.test vectors.0",
+							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+							"00",
+							"046d3bdf31d0db48988f16d47048fdd24123cd286e42d0512daa9f726b4ecf18df65ed42169c69675f936ff7de5f9bd93adbc8ea73036b16e8d90adbfabdaddba7",
+							"042eff91b46617d0628b979405bb871a7593e4b02ec533712bc1cf80d0b0a1ccf30ec3b161632183ceedf94fbe35a96e60a17c2c79c6379b141eeeba521ea8030f",
+							"d959500a78ccf850ce46c80a8c5043c9a2e33844232b3829df37d05b3069f455",
+							"4253051878eac98187f1394605a3ef5ce1981e664cea41e8094c7d12c606d906",
+							"04905fb0bd35fa19c1ea77c21ab6e4865a812439a7f0ab2a7d3cec52e8ec6689df18bd6eb5128f6a0cac4d1ccc2ba37a104cb72c7790ebf891d3c2a13aefd2a435",
+							"a2dc23a15b4c400063babb2a7b8b8b3efd01ccc4ee4d84536ed9ce12da1b579d",
+						);
+						await runTestVector(
 							"ARKG-P256.test vectors.1",
 							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
@@ -644,6 +670,18 @@ export function tests() {
 							"4253051878eac98187f1394605a3ef5ce1981e664cea41e8094c7d12c606d906",
 							"0483010a7edac725e7a9f0c215cc98a6a0e3c3b68cf199042af071530a0ba6b2cc4c183ba3e134de5ac214bbf5dabcf33f285b601ab6cd1f6026d56e7cbf12cf92",
 							"3e0cfb8bca3fb84104c1710a72bcdbadf7ed2a9bafc2ffcb79ebbba8e81f86f0",
+						);
+						await runTestVector(
+							"ARKG-P256.test vectors.1",
+							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+							"00",
+							"046d3bdf31d0db48988f16d47048fdd24123cd286e42d0512daa9f726b4ecf18df65ed42169c69675f936ff7de5f9bd93adbc8ea73036b16e8d90adbfabdaddba7",
+							"042eff91b46617d0628b979405bb871a7593e4b02ec533712bc1cf80d0b0a1ccf30ec3b161632183ceedf94fbe35a96e60a17c2c79c6379b141eeeba521ea8030f",
+							"d959500a78ccf850ce46c80a8c5043c9a2e33844232b3829df37d05b3069f455",
+							"4253051878eac98187f1394605a3ef5ce1981e664cea41e8094c7d12c606d906",
+							"040b4d0a34b330ee9ee4f438455363830873411809bb6c5f8fbb6fb7d43738d995cd21198771abd6616aae59eef02df4d1d636e073ff4f4bea2c925081eacd7df8",
+							"6d54230422bb0caf35a44e671841425e2667bf340ce66a38bf8089d80568efa7",
 						);
 					});
 				});
