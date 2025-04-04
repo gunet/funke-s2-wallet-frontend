@@ -3,25 +3,25 @@
 
 import * as ec from './ec';
 import * as hash_to_curve from './hash_to_curve';
-import { byteArrayEquals, concat, fromBase64Url, fromHex, OS2IP, toBase64, toHex, toU8 } from '../util';
+import { byteArrayEquals, concat, fromBase64Url, fromHex, toBase64, toHex, toU8 } from '../util';
 import { COSE_ALG_ARKG_P256ADD_ECDH } from '../coseConstants';
 import { ParsedCOSEKeyArkgPubSeed, ParsedCOSEKeyEc2Public } from '../webauthn';
 
 
 const CTX_MAX_LEN = 64;
 
-type GenerateKeypairFunction<PublicKey, PrivateKey> = (
-	() => Promise<[PublicKey, PrivateKey]>
+type DeriveKeypairFunction<PublicKey, PrivateKey> = (
+	(ikm: BufferSource) => Promise<[PublicKey, PrivateKey]>
 );
 
 type KemEncapsFunction<PublicKey> = (
-	(pubk: PublicKey, ctx: BufferSource) => Promise<[ArrayBuffer, ArrayBuffer]>
+	(pubk: PublicKey, ikm: BufferSource, ctx: BufferSource) => Promise<[ArrayBuffer, ArrayBuffer]>
 );
 type KemDecapsFunction<PrivateKey> = (
 	(prik: PrivateKey, c: BufferSource, ctx: BufferSource) => Promise<ArrayBuffer>
 );
 type KemScheme<PublicKey, PrivateKey> = {
-	generateKeypair: GenerateKeypairFunction<PublicKey, PrivateKey>,
+	deriveKeypair: DeriveKeypairFunction<PublicKey, PrivateKey>,
 	encaps: KemEncapsFunction<PublicKey>,
 	decaps: KemDecapsFunction<PrivateKey>,
 }
@@ -30,7 +30,7 @@ type BlBlindKeyFunction<BaseKey, BlindedKey> = (
 	(key: BaseKey, tau: BufferSource, ctx: BufferSource) => Promise<BlindedKey>
 );
 type BlScheme<PublicKey, PrivateKey, DerivedPublicKey, DerivedPrivateKey> = {
-	generateKeypair: GenerateKeypairFunction<PublicKey, PrivateKey>,
+	deriveKeypair: DeriveKeypairFunction<PublicKey, PrivateKey>,
 	blindPublicKey: BlBlindKeyFunction<PublicKey, DerivedPublicKey>,
 	blindPrivateKey: BlBlindKeyFunction<PrivateKey, DerivedPrivateKey>,
 }
@@ -44,12 +44,13 @@ type ArkgPrivateSeed<BlPrivateKey, KemPrivateKey> = {
 	prik_kem: KemPrivateKey,
 }
 
-type ArkgGenerateSeedFunction<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey> = (
-	GenerateKeypairFunction<ArkgPublicSeed<BlPublicKey, KemPublicKey>, ArkgPrivateSeed<BlPrivateKey, KemPrivateKey>>
+type ArkgDeriveSeedFunction<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey> = (
+	(ikm_bl: BufferSource, ikm_kem: BufferSource) => Promise<[ArkgPublicSeed<BlPublicKey, KemPublicKey>, ArkgPrivateSeed<BlPrivateKey, KemPrivateKey>]>
 );
 type ArkgDerivePublicKeyFunction<BlPublicKey, KemPublicKey, DerivedPublicKey> = (
 	(
 		seed_pk: ArkgPublicSeed<BlPublicKey, KemPublicKey>,
+		ikm: BufferSource,
 		ctx: BufferSource,
 	) => Promise<[DerivedPublicKey, ArrayBuffer]>
 );
@@ -62,7 +63,7 @@ type ArkgDerivePrivateKeyFunction<BlPrivateKey, KemPrivateKey, DerivedPrivateKey
 );
 type ArkgInstance<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPublicKey, DerivedPrivateKey> = {
 	/** @see https://yubico.github.io/arkg-rfc/draft-bradleylundberg-cfrg-arkg.html#name-the-function-arkg-generate- */
-	generateSeed: ArkgGenerateSeedFunction<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey>,
+	deriveSeed: ArkgDeriveSeedFunction<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey>,
 
 	/** @see https://yubico.github.io/arkg-rfc/draft-bradleylundberg-cfrg-arkg.html#name-the-function-arkg-derive-pu */
 	derivePublicKey: ArkgDerivePublicKeyFunction<BlPublicKey, KemPublicKey, DerivedPublicKey>,
@@ -78,9 +79,9 @@ function arkg<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPub
 	kem: KemScheme<KemPublicKey, KemPrivateKey>,
 ): ArkgInstance<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPublicKey, DerivedPrivateKey> {
 	return {
-		generateSeed: async (): Promise<[ArkgPublicSeed<BlPublicKey, KemPublicKey>, ArkgPrivateSeed<BlPrivateKey, KemPrivateKey>]> => {
-			const [pubk_bl, prik_bl] = await bl.generateKeypair();
-			const [pubk_kem, prik_kem] = await kem.generateKeypair();
+		deriveSeed: async (ikm_bl: BufferSource, ikm_kem): Promise<[ArkgPublicSeed<BlPublicKey, KemPublicKey>, ArkgPrivateSeed<BlPrivateKey, KemPrivateKey>]> => {
+			const [pubk_bl, prik_bl] = await bl.deriveKeypair(ikm_bl);
+			const [pubk_kem, prik_kem] = await kem.deriveKeypair(ikm_kem);
 			const pubk = { pubk_bl, pubk_kem };
 			const prik = { prik_bl, prik_kem };
 			return [pubk, prik];
@@ -88,6 +89,7 @@ function arkg<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPub
 
 		derivePublicKey: async (
 			{ pubk_bl, pubk_kem }: ArkgPublicSeed<BlPublicKey, KemPublicKey>,
+			ikm: BufferSource,
 			ctx: BufferSource,
 		): Promise<[DerivedPublicKey, ArrayBuffer]> => {
 			if (ctx.byteLength > CTX_MAX_LEN) {
@@ -96,7 +98,7 @@ function arkg<BlPublicKey, BlPrivateKey, KemPublicKey, KemPrivateKey, DerivedPub
 
 			const ctx_kem = concat(new TextEncoder().encode('ARKG-Derive-Key-KEM.'), new Uint8Array([ctx.byteLength]), ctx);
 			const ctx_bl = concat(new TextEncoder().encode('ARKG-Derive-Key-BL.'), new Uint8Array([ctx.byteLength]), ctx);
-			const [tau, c] = await kem.encaps(pubk_kem, ctx_kem);
+			const [tau, c] = await kem.encaps(pubk_kem, ikm, ctx_kem);
 			const pk_prime = await bl.blindPublicKey(pubk_bl, tau, ctx_bl);
 			const kh = c;
 			return [pk_prime, kh];
@@ -136,17 +138,12 @@ function arkgBlEcAdd(
 	}
 
 	return {
-		generateKeypair: async (): Promise<[ec.Point, bigint]> => {
-			const { publicKey, privateKey } = await crypto.subtle.generateKey(
-				{ name: "ECDSA", namedCurve: suiteParams.curve.webCryptoName },
-				true,
-				["sign"],
-			);
-			const jwk = await crypto.subtle.exportKey("jwk", privateKey);
-			return [
-				await ec.pointFromPublicKey(crv, publicKey),
-				OS2IP(fromBase64Url(jwk.d)),
-			];
+		deriveKeypair: async (ikm: BufferSource): Promise<[ec.Point, bigint]> => {
+			const DST = concat(new TextEncoder().encode('ARKG-BL-EC-KG.'), dst_ext);
+			const { hashToScalarField } = hash_to_curve.hashToCurve(hashToCurveSuiteId, DST);
+			const [[sk]] = await hashToScalarField(ikm, 1);
+			const pk = ec.vartimeMul(crv, crv.generator, sk);
+			return [pk, sk];
 		},
 
 		blindPublicKey: async (pk: ec.Point, tau: BufferSource, ctx: BufferSource): Promise<ec.Point> => {
@@ -178,13 +175,13 @@ function arkgHmacKem<PublicKey, PrivateKey>(
 	SubKem: KemScheme<PublicKey, PrivateKey>,
 ): KemScheme<PublicKey, PrivateKey> {
 	return {
-		generateKeypair: SubKem.generateKeypair,
+		deriveKeypair: SubKem.deriveKeypair,
 
-		encaps: async (pubk: PublicKey, ctx: BufferSource): Promise<[ArrayBuffer, ArrayBuffer]> => {
+		encaps: async (pubk: PublicKey, ikm: BufferSource, ctx: BufferSource): Promise<[ArrayBuffer, ArrayBuffer]> => {
 			const ctx_sub = concat(new TextEncoder().encode('ARKG-KEM-HMAC.'), dst_ext, ctx);
-			const [k_prime, c_prime] = await SubKem.encaps(pubk, ctx_sub);
+			const [k_prime, c_prime] = await SubKem.encaps(pubk, ikm, ctx_sub);
 
-			const ikm = await crypto.subtle.importKey("raw", k_prime, { name: "HKDF" }, false, ["deriveBits", "deriveKey"]);
+			const hkdf_ikm = await crypto.subtle.importKey("raw", k_prime, { name: "HKDF" }, false, ["deriveBits", "deriveKey"]);
 
 			const mk = await crypto.subtle.deriveKey(
 				{
@@ -193,7 +190,7 @@ function arkgHmacKem<PublicKey, PrivateKey>(
 					salt: new Uint8Array([]),
 					info: concat(new TextEncoder().encode('ARKG-KEM-HMAC-mac.'), dst_ext, ctx),
 				},
-				ikm,
+				hkdf_ikm,
 				{ name: "HMAC", hash, length: 32*8 },
 				false,
 				["sign"],
@@ -207,7 +204,7 @@ function arkgHmacKem<PublicKey, PrivateKey>(
 					salt: new Uint8Array([]),
 					info: concat(new TextEncoder().encode('ARKG-KEM-HMAC-shared.'), dst_ext, ctx),
 				},
-				ikm,
+				hkdf_ikm,
 				k_prime.byteLength * 8,
 			);
 			const c = concat(t, c_prime);
@@ -262,6 +259,7 @@ function arkgHmacKem<PublicKey, PrivateKey>(
 function arkgEcdhKem(
 	namedCurve: "P-256",
 	hash: "SHA-256",
+	hashToCurveSuiteId: hash_to_curve.SuiteId,
 	dst_ext: BufferSource,
 ): KemScheme<CryptoKey, CryptoKey> {
 	const [crv, L]: [ec.Curve, number] = (namedCurve === "P-256" ? [ec.curveSecp256r1(), 8 * 32] : [null, null]);
@@ -269,20 +267,22 @@ function arkgEcdhKem(
 		throw new Error("Unknown curve: " + namedCurve);
 	}
 
-	const generateKeypair = async (): Promise<[CryptoKey, CryptoKey]> => {
-		const { publicKey, privateKey } = await crypto.subtle.generateKey(
-			{ name: "ECDH", namedCurve },
-			true,
-			["deriveBits"],
-		);
-		return [publicKey, privateKey];
+	const deriveKeypair = async (ikm: BufferSource): Promise<[CryptoKey, CryptoKey]> => {
+		const DST = concat(new TextEncoder().encode('ARKG-KEM-ECDH-KG.'), dst_ext);
+		const { hashToScalarField } = hash_to_curve.hashToCurve(hashToCurveSuiteId, DST);
+		const [[sk]] = await hashToScalarField(ikm, 1);
+		const pk = ec.vartimeMul(crv, crv.generator, sk);
+		return [
+			await ec.publicKeyFromPoint("ECDH", namedCurve, pk),
+			await ec.privateKeyFromScalar("ECDH", namedCurve, sk, true, ["deriveBits"]),
+		];
 	};
 
 	return arkgHmacKem(hash, dst_ext, {
-		generateKeypair,
+		deriveKeypair,
 
-		encaps: async (pubk: CryptoKey, _ctx: BufferSource): Promise<[ArrayBuffer, ArrayBuffer]> => {
-			const [pk_prime, sk_prime] = await generateKeypair();
+		encaps: async (pubk: CryptoKey, ikm: BufferSource, _ctx: BufferSource): Promise<[ArrayBuffer, ArrayBuffer]> => {
+			const [pk_prime, sk_prime] = await deriveKeypair(ikm);
 			const k = await crypto.subtle.deriveBits({ name: "ECDH", public: pubk }, sk_prime, L);
 			const c = await crypto.subtle.exportKey("raw", pk_prime);
 			return [k, c];
@@ -307,7 +307,7 @@ export type EcInstanceId = (
 const ecInstances: { [id in EcInstanceId]: () => ArkgInstance<ec.Point, bigint, CryptoKey, CryptoKey, ec.Point, bigint> } = {
 	'ARKG-P256ADD-ECDH': () => arkg(
 		arkgBlEcAdd("P256_XMD:SHA-256_SSWU_RO_", new TextEncoder().encode('ARKG-P256ADD-ECDH')),
-		arkgEcdhKem("P-256", "SHA-256", new TextEncoder().encode('ARKG-P256ADD-ECDH')),
+		arkgEcdhKem("P-256", "SHA-256", "P256_XMD:SHA-256_SSWU_RO_", new TextEncoder().encode('ARKG-P256ADD-ECDH')),
 	),
 };
 
@@ -351,6 +351,7 @@ export async function ecPublicKeyFromCose(pk: ParsedCOSEKeyArkgPubSeed): Promise
 
 import { assert, describe, it } from "vitest"; // eslint-disable-line import/first
 import { asyncAssertThrows } from '../testutil'; // eslint-disable-line import/first
+import { bigIntToBinary } from './util';
 
 export function tests() {
 
@@ -390,25 +391,42 @@ export function tests() {
 			instanceName: EcInstanceId,
 			namedCurve: "P-256",
 			signAlgorithm: EcdsaParams,
+			crv: ec.Curve,
 		}[] = [
 				{
 					instanceName: "ARKG-P256ADD-ECDH",
 					namedCurve: "P-256",
 					signAlgorithm: { name: "ECDSA", hash: "SHA-256" },
+					crv: ec.curveSecp256r1(),
 				},
 			];
-		for (const { instanceName, namedCurve, signAlgorithm } of instances) {
+		for (const { instanceName, namedCurve, signAlgorithm, crv } of instances) {
 			const arkgInstance = getEcInstance(instanceName);
 
 			describe(`instance ${instanceName}`, async () => {
 
+				const ikm_bl = crypto.getRandomValues(new Uint8Array(32));
+				const ikm_kem = crypto.getRandomValues(new Uint8Array(32));
+				const ikm = crypto.getRandomValues(new Uint8Array(32));
+
+				const ikm_bl_1 = ikm_bl;
+				const ikm_bl_2 = crypto.getRandomValues(new Uint8Array(32));
+				const ikm_kem_1 = ikm_kem;
+				const ikm_kem_2 = crypto.getRandomValues(new Uint8Array(32));
+				const ikm_1 = ikm;
+				const ikm_2 = crypto.getRandomValues(new Uint8Array(32));
+
+				const [pub_seed, pri_seed] = await arkgInstance.deriveSeed(ikm_bl, ikm_kem);
+
+				const ctx = new TextEncoder().encode(instanceName + "test vectors");
+				const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ikm, ctx);
+
 				it("forbids ctx values longer than 64 bytes.", async () => {
-					const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
 					const ctx = crypto.getRandomValues(new Uint8Array(65));
-					const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ctx.slice(0, 64));
+					const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ikm, ctx.slice(0, 64));
 					assert.deepEqual(
 						(await asyncAssertThrows(
-							async () => await arkgInstance.derivePublicKey(pub_seed, ctx),
+							async () => await arkgInstance.derivePublicKey(pub_seed, ikm, ctx),
 							"Expected derivePublicKey to fail with ctx longer than 64 bytes",
 						) as any).cause,
 						{ ctx, maxLength: 64 },
@@ -431,50 +449,47 @@ export function tests() {
 				});
 
 				it.skip("test vector generation", async () => {
-					function bigIntFromBinary(binary: Uint8Array): bigint {
-						return binary.reduce(
-							(result: bigint, b: number) => (result << 8n) + BigInt(b),
-							0n,
-						);
+					for (const ctx_suffix of [".test vectors", ".test vectors.0", ".test vectors.1"]) {
+						const ikm_bl = fromHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+						const ikm_kem = fromHex("202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f");
+						const ikm = fromHex("404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f");
+
+						const [pub_seed, pri_seed] = await arkgInstance.deriveSeed(ikm_bl, ikm_kem);
+						const ctx_text = instanceName + ctx_suffix;
+						const ctx = new TextEncoder().encode(ctx_text);
+						const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ikm, ctx);
+						const derived_prik = await arkgInstance.derivePrivateKey(pri_seed, kh, ctx);
+						const publicKey = await ec.publicKeyFromPoint(signAlgorithm.name, namedCurve, derived_pubk);
+						const privateKey = await ec.privateKeyFromScalar(signAlgorithm.name, namedCurve, derived_prik, false, ["sign"]);
+						const sig = await crypto.subtle.sign(signAlgorithm, privateKey, ctx);
+
+						console.log("Inputs:");
+						console.log(`ctx:           '${ctx_text}'`);
+						console.log(`ikm_bl:        h'${toHex(ikm_bl)}'`);
+						console.log(`ikm_kem:       h'${toHex(ikm_kem)}'`);
+						console.log(`ikm:           h'${toHex(ikm)}'`);
+						console.log();
+
+						console.log("Derive-Seed outputs:");
+						console.log(`pk_bl:         h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", pub_seed.pubk_bl))))}'`);
+						console.log(`pk_kem:        h'${toHex(toU8(await crypto.subtle.exportKey("raw", pub_seed.pubk_kem)))}'`);
+						console.log(`sk_bl:         0x${toHex(bigIntToBinary(pri_seed.prik_bl, 32))}`);
+						console.log(`sk_kem:        0x${toHex(fromBase64Url((await crypto.subtle.exportKey("jwk", pri_seed.prik_kem)).d))}`);
+						console.log();
+
+						console.log("Derive-Public-Key outputs:");
+						console.log(`derived_pubk:  h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", derived_pubk))))}'`);
+						console.log(`kh:            (implementation defined)`);
+						console.log();
+
+						console.log("Derive-Private-Key outputs:");
+						console.log(`derived_prik:  0x${toHex(bigIntToBinary(derived_prik, 32))}'`);
 					}
-
-					function bigIntToBinary(a: bigint, length: number): Uint8Array {
-						return new Uint8Array(length).map(
-							(_, i: number): number =>
-								Number(BigInt.asUintN(8, a >> (BigInt(length - 1 - i) * 8n)))
-						);
-					}
-
-					const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
-					const ctx_text = instanceName + ".test vectors";
-					const ctx = new TextEncoder().encode(ctx_text);
-					const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ctx);
-					const derived_prik = await arkgInstance.derivePrivateKey(pri_seed, kh, ctx);
-					const publicKey = await ec.publicKeyFromPoint(signAlgorithm.name, namedCurve, derived_pubk);
-					const privateKey = await ec.privateKeyFromScalar(signAlgorithm.name, namedCurve, derived_prik, false, ["sign"]);
-					const sig = await crypto.subtle.sign(signAlgorithm, privateKey, ctx);
-
-					console.log("Inputs:");
-					console.log(`ctx:           '${ctx_text}'`);
-					console.log(`pk_bl:         h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", pub_seed.pubk_bl))))}'`);
-					console.log(`pk_kem:        h'${toHex(toU8(await crypto.subtle.exportKey("raw", pub_seed.pubk_kem)))}'`);
-					console.log(`sk_bl:         0x${toHex(bigIntToBinary(pri_seed.prik_bl, 32))}`);
-					console.log(`sk_kem:        0x${toHex(fromBase64Url((await crypto.subtle.exportKey("jwk", pri_seed.prik_kem)).d))}`);
-					console.log();
-					console.log("Derive-Public-Key outputs:");
-					console.log(`derived_pubk:  h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", derived_pubk))))}'`);
-					console.log(`kh:            h'${toHex(kh)}'`);
-					console.log();
-					console.log("Derive-Private-Key outputs:");
-					console.log(`derived_prik:  0x${toHex(bigIntToBinary(derived_prik, 32))}'`);
 
 					assert.isTrue(false, "Forced failure");
 				});
 
 				it("is correct.", async () => {
-					const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
-					const ctx = new TextEncoder().encode(instanceName + "test vectors");
-					const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ctx);
 					const derived_prik = await arkgInstance.derivePrivateKey(pri_seed, kh, ctx);
 					const publicKey = await ec.publicKeyFromPoint(signAlgorithm.name, namedCurve, derived_pubk);
 					const privateKey = await ec.privateKeyFromScalar(signAlgorithm.name, namedCurve, derived_prik, false, ["sign"]);
@@ -483,40 +498,46 @@ export function tests() {
 					assert.isTrue(valid, "Invalid signature");
 				});
 
-				describe("generateSeed", () => {
-					it("generates different results on repeat calls.", async () => {
-						const [pub_seed_1, pri_seed_1] = await arkgInstance.generateSeed();
-						const [pub_seed_2, pri_seed_2] = await arkgInstance.generateSeed();
+				describe("deriveSeed", () => {
+					it("derives the same results on repeat calls.", async () => {
+						const [pub_seed_1, pri_seed_1] = [pub_seed, pri_seed];
+						const [pub_seed_2, pri_seed_2] = await arkgInstance.deriveSeed(ikm_bl, ikm_kem);
+						assert.deepEqual(pub_seed_1, pub_seed_2);
+						assert.deepEqual(pri_seed_1, pri_seed_2);
+					});
+
+					it("derives different results on calls with different ikm.", async () => {
+						const [pub_seed_1, pri_seed_1] = [pub_seed, pri_seed];
+						const [pub_seed_2, pri_seed_2] = await arkgInstance.deriveSeed(ikm_bl_2, ikm_kem_2);
 						assert.notDeepEqual(pub_seed_1, pub_seed_2);
-						assert.notEqual(pri_seed_1, pri_seed_2);
+						assert.notDeepEqual(pri_seed_1, pri_seed_2);
 					});
 				});
 
 				describe("derivePublicKey", () => {
-					it("generates different results on repeat calls.", async () => {
-						const [pub_seed,] = await arkgInstance.generateSeed();
-						const ctx = new TextEncoder().encode(instanceName + "test vectors");
-						const [derived_pubk_1, kh_1] = await arkgInstance.derivePublicKey(pub_seed, ctx);
-						const [derived_pubk_2, kh_2] = await arkgInstance.derivePublicKey(pub_seed, ctx);
+					it("derives the same results on repeat calls.", async () => {
+						const [derived_pubk_1, kh_1] = await arkgInstance.derivePublicKey(pub_seed, ikm, ctx);
+						const [derived_pubk_2, kh_2] = await arkgInstance.derivePublicKey(pub_seed, ikm, ctx);
+						assert.deepEqual(derived_pubk_1, derived_pubk_2);
+						assert.deepEqual(toBase64(kh_1), toBase64(kh_2));
+					});
+
+					it("derives different results on calls with different ikm.", async () => {
+						const [derived_pubk_1, kh_1] = await arkgInstance.derivePublicKey(pub_seed, ikm_1, ctx);
+						const [derived_pubk_2, kh_2] = await arkgInstance.derivePublicKey(pub_seed, ikm_2, ctx);
 						assert.notDeepEqual(derived_pubk_1, derived_pubk_2);
 						assert.notDeepEqual(toBase64(kh_1), toBase64(kh_2));
 					});
 				});
 
 				describe("derivePrivateKey", () => {
-					it("generates the same result on repeat calls.", async () => {
-						const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
-						const ctx = new TextEncoder().encode(instanceName + "test vectors");
-						const [, kh] = await arkgInstance.derivePublicKey(pub_seed, ctx);
+					it("derives the same result on repeat calls.", async () => {
 						const derived_prik_1 = await arkgInstance.derivePrivateKey(pri_seed, kh, ctx);
 						const derived_prik_2 = await arkgInstance.derivePrivateKey(pri_seed, kh, ctx);
 						assert.equal(derived_prik_1, derived_prik_2);
 					});
 
 					it("fails if any bit of the key handle is modified.", async () => {
-						const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
-						const ctx = new TextEncoder().encode(instanceName + "test vectors");
-						const [, kh] = await arkgInstance.derivePublicKey(pub_seed, ctx);
 						const kh_u8 = new Uint8Array(kh);
 						for (let i = 0; i < kh.byteLength * 8; ++i) {
 							const kh_mod = new Uint8Array([...kh_u8]);
@@ -531,9 +552,6 @@ export function tests() {
 					});
 
 					it("derives the wrong private key if any bit of the key handle is modified.", async () => {
-						const [pub_seed, pri_seed] = await arkgInstance.generateSeed();
-						const ctx = new TextEncoder().encode(instanceName + "test vectors");
-						const [derived_pubk, kh] = await arkgInstance.derivePublicKey(pub_seed, ctx);
 						const kh_u8 = new Uint8Array(kh);
 						for (let i = 0; i < kh.byteLength * 8; ++i) {
 							const kh_mod = new Uint8Array([...kh_u8]);
@@ -557,22 +575,33 @@ export function tests() {
 					describe("passes test vectors:", async () => {
 						async function runTestVector(
 							ctx: string,
-							skBlHex: string,
-							skKemHex: string,
-							khHex: string,
+							ikmBlHex: string,
+							ikmKemHex: string,
+							ikmHex: string,
+							expectPkBlRawHex: string,
+							expectPkKemRawHex: string,
+							expectSkBlHex: string,
+							expectSkKemHex: string,
+							expectDerivedPkRawHex: string,
 							expectDerivedSkHex: string,
 						) {
 							it(ctx, async () => {
 								const ctxBytes = new TextEncoder().encode(ctx);
-								const sk = {
-									prik_bl: BigInt("0x" + skBlHex),
-									prik_kem: await ec.privateKeyFromScalar("ECDH", "P-256", BigInt("0x" + skKemHex), false, ["deriveBits"]),
-								};
-								const kh = fromHex(khHex);
-
 								const arkgInstance = getEcInstance('ARKG-P256ADD-ECDH');
-								const derivedPrivateKey = await arkgInstance.derivePrivateKey(sk, kh, ctxBytes);
 
+								const [seed_pk, seed_sk] = await arkgInstance.deriveSeed(fromHex(ikmBlHex), fromHex(ikmKemHex));
+								assert.deepEqual(seed_pk.pubk_bl, await ec.pointFromRaw(crv, fromHex(expectPkBlRawHex)));
+								assert.deepEqual(
+									await ec.pointFromPublicKey(crv, seed_pk.pubk_kem),
+									await ec.pointFromRaw(crv, fromHex(expectPkKemRawHex)),
+								);
+								assert.deepEqual(seed_sk.prik_bl, BigInt("0x" + expectSkBlHex));
+								assert.deepEqual(await ec.scalarFromPrivateKey(seed_sk.prik_kem), BigInt("0x" + expectSkKemHex));
+
+								const [derivedPubKey, kh] = await arkgInstance.derivePublicKey(seed_pk, fromHex(ikmHex), ctxBytes);
+								assert.deepEqual(derivedPubKey, await ec.pointFromRaw(crv, fromHex(expectDerivedPkRawHex)));
+
+								const derivedPrivateKey = await arkgInstance.derivePrivateKey(seed_sk, kh, ctxBytes);
 								assert.equal(
 									derivedPrivateKey,
 									BigInt("0x" + expectDerivedSkHex),
@@ -582,24 +611,39 @@ export function tests() {
 
 						await runTestVector(
 							"ARKG-P256ADD-ECDH.test vectors",
-							"dc9aca70ed13bef3b9be15e811abf639ffa4e31f5ae98e45ff143c1a3a87bd90",
-							"6c26ea6f66d30f898939811ac643ba5fd9ad194ce0b9b37ec56feb2722bbb212",
-							"80b0a73df7d44c273e238cec168ddb9a04907c7b7367b10d5323ef40ab97006f8bc958900f0473e911b7efb5b6b5ada709a30c6bc711dba1e18a0c8596f1741beec2a7fae6396451a1348cb9b80f5efe30",
-							"3363715c3986afe8da4b12747963acd5babae2c95a6684aff99af75ec927223b",
+							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+							"404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+							"04a2fcaffb07af4b764b068d62920acae0c686ed1dbcb23706eb00d9d6eb72f2629b9b7d2f750580f9236f8780f97fd52e897bed34387310b5f1e09afe158b0f75",
+							"040dcdd2b5eadeb52f2a806625e53b570de074a821cd9849e14e96e44c2fa2e858258e36c039e7561016e39895f66dda39dca57dc8a6fc21f82faa2d0514a18aa9",
+							"1cce34353e9d754687fa424541e443f02de665761e81e9e5f0f2ea3affcedd1f",
+							"90c21c9eef3c4e69770d19e9d6e6cb02fd3353902719066a26b08a0f5cc32bb0",
+							"04d41480fe39da63c0de34433176e4032b65fb7720a3a1481db73be20d8a01858839e5cdeead5ac782cb6c010d489eb7009813220d22797456e505af7ebb6fa89c",
+							"59cfb764e0eca750cc7d4a53d74f5c420aebf4e7df7a2c3cfdf57e6d19bc5ef1",
 						);
 						await runTestVector(
 							"ARKG-P256ADD-ECDH.test vectors.0",
-							"7ae5a6502422d43276c6959b237000a380bb49321c60b88616f525950b15bd2b",
-							"9326afe20f1bf902a2b49715cbecc6c3e127be0d28f72312f4755627cac415b5",
-							"3a50bf73ffd00e837992f1558961768d04ee20a8b5d34d519ae42fdb16e6856bd99b865241ebd24edaba506e3963ee225a48d0d81e58a1b0bacb0c4ff76f7ec0e918b8bd3af2be5bb1ed8ba5ba50bab36a",
-							"b25fb6fd6429288266f8c5d095fb71837c8e09a323749c0c836d330e5cef5855",
+							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+							"404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+							"04a2fcaffb07af4b764b068d62920acae0c686ed1dbcb23706eb00d9d6eb72f2629b9b7d2f750580f9236f8780f97fd52e897bed34387310b5f1e09afe158b0f75",
+							"040dcdd2b5eadeb52f2a806625e53b570de074a821cd9849e14e96e44c2fa2e858258e36c039e7561016e39895f66dda39dca57dc8a6fc21f82faa2d0514a18aa9",
+							"1cce34353e9d754687fa424541e443f02de665761e81e9e5f0f2ea3affcedd1f",
+							"90c21c9eef3c4e69770d19e9d6e6cb02fd3353902719066a26b08a0f5cc32bb0",
+							"046771eed3da75251f0888d87eae7f61e0f0ea2cf186905be63f63fa2e10952c9670fbb392d7004bd1fd419523aa50429f8bfb2c6da2162f2300888910c1d1f408",
+							"b4e524d084900583d71842ecca19b09a8514701ceab877d08db0b598f3a3cb50",
 						);
 						await runTestVector(
 							"ARKG-P256ADD-ECDH.test vectors.1",
-							"124ee0afda2dc2fc0ce46d12824fe7a81b4220293af7cdf1c5ad95ba7175ab94",
-							"27e27a9d6b1b45b21449c7a69edb7da504c86e53939f82c76e200068c105cd5e",
-							"8aeac2902c39f0ae30c26568f2c2f970045d2490c1edfa918136ddc41305ff354fd3f927f9c748509548ca816e28cdef66a0b033438cd25a588924604a3e6530a99292af56b80a9b8980c2b3421c11d9d3",
-							"c362990d56f9441c7eb04ce4bdd9920d91b8e10acd256ddc51180fa56f273388",
+							"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+							"202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+							"404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+							"04a2fcaffb07af4b764b068d62920acae0c686ed1dbcb23706eb00d9d6eb72f2629b9b7d2f750580f9236f8780f97fd52e897bed34387310b5f1e09afe158b0f75",
+							"040dcdd2b5eadeb52f2a806625e53b570de074a821cd9849e14e96e44c2fa2e858258e36c039e7561016e39895f66dda39dca57dc8a6fc21f82faa2d0514a18aa9",
+							"1cce34353e9d754687fa424541e443f02de665761e81e9e5f0f2ea3affcedd1f",
+							"90c21c9eef3c4e69770d19e9d6e6cb02fd3353902719066a26b08a0f5cc32bb0",
+							"04f0027a51cfaa8163259477d0f082d8d8645caa7a6fc5aaf9eaf2b6394a5791aec790ffdf4ac4710e59f2a77a2699be665a8db9a272eefe1893b90ebd21b4fc54",
+							"8ce0efc9d0ea0696ee6c29c7a3d64f3306413580b05d1a819c51da6e973e0415",
 						);
 					});
 				});
