@@ -465,26 +465,26 @@ export function tests() {
 							const sig = await crypto.subtle.sign(signAlgorithm, privateKey, ctx);
 
 							console.log("; Inputs:");
-							console.log(`ctx =          '${ctx_text}'`);
-							console.log(`ikm_bl =       h'${toHex(ikm_bl)}'`);
-							console.log(`ikm_kem =      h'${toHex(ikm_kem)}'`);
-							console.log(`ikm =          h'${toHex(ikm)}'`);
+							console.log(`ctx      = '${ctx_text}'`);
+							console.log(`ikm_bl   = h'${toHex(ikm_bl)}'`);
+							console.log(`ikm_kem  = h'${toHex(ikm_kem)}'`);
+							console.log(`ikm      = h'${toHex(ikm)}'`);
 							console.log();
 
 							console.log("; Derive-Seed outputs:");
-							console.log(`pk_bl =        h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", pub_seed.pubk_bl))))}'`);
-							console.log(`pk_kem =       h'${toHex(toU8(await crypto.subtle.exportKey("raw", pub_seed.pubk_kem)))}'`);
-							console.log(`sk_bl =        0x${toHex(bigIntToBinary(pri_seed.prik_bl, 32))}`);
-							console.log(`sk_kem =       0x${toHex(fromBase64Url((await crypto.subtle.exportKey("jwk", pri_seed.prik_kem)).d))}`);
+							console.log(`pk_bl    = h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", pub_seed.pubk_bl))))}'`);
+							console.log(`pk_kem   = h'${toHex(toU8(await crypto.subtle.exportKey("raw", pub_seed.pubk_kem)))}'`);
+							console.log(`sk_bl    = 0x${toHex(bigIntToBinary(pri_seed.prik_bl, 32))}`);
+							console.log(`sk_kem   = 0x${toHex(fromBase64Url((await crypto.subtle.exportKey("jwk", pri_seed.prik_kem)).d))}`);
 							console.log();
 
 							console.log("; Derive-Public-Key outputs:");
-							console.log(`derived_pubk = h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", derived_pubk))))}'`);
-							console.log(`;kh =          (implementation defined)`);
+							console.log(`pk_prime = h'${toHex(toU8(await crypto.subtle.exportKey("raw", await ec.publicKeyFromPoint("ECDSA", "P-256", derived_pubk))))}'`);
+							console.log(`;kh      = (implementation defined)`);
 							console.log();
 
 							console.log("; Derive-Private-Key outputs:");
-							console.log(`derived_prik = 0x${toHex(bigIntToBinary(derived_prik, 32))}'`);
+							console.log(`sk_prime = 0x${toHex(bigIntToBinary(derived_prik, 32))}`);
 						}
 					}
 
