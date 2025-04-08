@@ -1,5 +1,5 @@
 /// Implementation of ARKG
-/// https://yubico.github.io/arkg-rfc/draft-bradleylundberg-cfrg-arkg.html
+/// https://datatracker.ietf.org/doc/draft-bradleylundberg-cfrg-arkg/05/
 
 import * as ec from './ec';
 import * as hash_to_curve from './hash_to_curve';
